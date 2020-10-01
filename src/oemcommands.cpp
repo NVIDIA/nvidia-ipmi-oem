@@ -4,8 +4,7 @@
  * License Information here...
  */
 
-#include "oem_global_handler.hpp"
-#include "include/oem_commands.hpp"
+#include "oemcommands.hpp"
 
 #include <ipmid/api.hpp>
 #include <ipmid/api-types.hpp>
@@ -280,3 +279,4 @@ void registerNvOemFunctions()
                           ipmi::ipmiPSUInventoryInfo);
     return;
 }
+
