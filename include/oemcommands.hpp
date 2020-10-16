@@ -16,6 +16,8 @@ namespace app
 {
 constexpr auto cmdSystemFactoryReset = 0x66;
 constexpr auto cmdPSUInventoryInfo = 0x0E;
+constexpr auto cmdGetSELPolicy = 0x7E;
+constexpr auto cmdSetSELPolicy = 0x7F;
 
 } // namespace app
 

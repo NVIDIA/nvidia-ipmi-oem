@@ -40,7 +40,7 @@ static constexpr bool DEBUG = false;
 
 namespace nvidia_oem::ipmi::sel
 {
-static const std::filesystem::path selLogDir = "/var/log";
+static const std::filesystem::path selLogDir = "/var";
 static const std::string selLogFilename = "ipmi_sel";
 
 static int getFileTimestamp(const std::filesystem::path& file)
@@ -102,6 +102,11 @@ constexpr static const char* fruDeviceServiceName =
     "xyz.openbmc_project.FruDevice";
 constexpr static const char* entityManagerServiceName =
     "xyz.openbmc_project.EntityManager";
+// SEL ipmi event add in dbus
+static constexpr char const *ipmiSELObj = "xyz.openbmc_project.Logging.IPMI";
+static constexpr char const *ipmiSELPath = "/xyz/openbmc_project/Logging/IPMI";
+static constexpr char const *ipmiSELAddInterface = "xyz.openbmc_project.Logging.IPMI";
+static constexpr uint16_t selBMCGenID = 0x0020;
 constexpr static const size_t writeTimeoutSeconds = 10;
 constexpr static const char* chassisTypeRackMount = "23";
 
@@ -1113,12 +1118,39 @@ ipmi::RspType<uint16_t, // Next Record ID
 ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
     uint16_t recordID, uint8_t recordType, uint32_t timestamp,
     uint16_t generatorID, uint8_t evmRev, uint8_t sensorType, uint8_t sensorNum,
-    uint8_t eventType, uint8_t eventData1, uint8_t eventData2,
-    uint8_t eventData3)
+    uint8_t eventType, uint8_t eventData1, std::optional<uint8_t> eventData2,
+    std::optional<uint8_t> eventData3)
 {
     // Per the IPMI spec, need to cancel any reservation when a SEL entry is
     // added
     cancelSELReservation();
+
+    // Metadata for IpmiSelAdd
+    bool assert = eventType & directionMask ? false : true;
+
+    std::vector<uint8_t> eventData;
+    eventData.push_back(eventData1);
+    eventData.push_back(eventData2.value_or(0xFF));
+    eventData.push_back(eventData3.value_or(0xFF));
+
+    std::string sensorPath = getPathFromSensorNumber(sensorNum);
+
+    auto bus = sdbusplus::bus::new_default();
+    auto writeSEL = bus.new_method_call(
+                    ipmiSELObj, ipmiSELPath, ipmiSELAddInterface, "IpmiSelAdd");
+    writeSEL.append(ipmiSELAddMessage, sensorPath, eventData, assert, selBMCGenID);
+
+    try
+    {
+        bus.call(writeSEL);
+    }
+    catch (sdbusplus::exception_t &e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to add ipmi SEL event",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
 
     uint16_t responseID = 0xFFFF;
     return ipmi::responseSuccess(responseID);

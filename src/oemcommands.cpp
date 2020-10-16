@@ -11,6 +11,7 @@
 #include <ipmid/utils.hpp>
 #include <phosphor-logging/elog-errors.hpp>
 #include <phosphor-logging/log.hpp>
+#include <sdbusplus/bus.hpp>
 #include <string>
 #include <vector>
 #include <array>
@@ -29,6 +30,10 @@ const char* networkResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 const char* sftBMCService = "xyz.openbmc_project.Software.BMC.Updater";
 const char* sftBMCObj = "/xyz/openbmc_project/software";
 const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
+
+// SEL policy in dbus
+const char* selLogObj = "/xyz/openbmc_project/logging/settings";
+const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
 
 void registerNvOemFunctions() __attribute__((constructor));
 
@@ -254,6 +259,101 @@ ipmiPSUInventoryInfo(uint8_t psuNum, uint8_t psuInfoSelector)
     return ipmi::responseSuccess(psuInfoSelector, dataReceived);
 }
 
+ipmi::RspType<uint8_t> ipmiGetSELPolicy()
+{
+    // SEL policy:
+    // Linear represents 0x00
+    // Circular represents 0x01
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        auto service =
+            ipmi::getService(*dbus, selLogIntf, selLogObj);
+        auto policy =
+            ipmi::getDbusProperty(*dbus, service, selLogObj,
+                selLogIntf, "SelPolicy");
+        if (std::get<std::string>(policy) ==
+            "xyz.openbmc_project.Logging.Settings.Policy.Linear")
+        {
+            return ipmi::responseSuccess(static_cast<uint8_t>(0));
+        }
+        else if (std::get<std::string>(policy) ==
+           "xyz.openbmc_project.Logging.Settings.Policy.Circular")
+        {
+            return ipmi::responseSuccess(static_cast<uint8_t>(1));
+        }
+        else
+        {
+            return ipmi::responseResponseError();
+        }
+    }
+    catch (std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to get BMC SEL policy",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+}
+
+ipmi::RspType<> ipmiSetSELPolicy(uint8_t policyType)
+{
+    // SEL policy:
+    // Linear represents 0x00
+    // Circular represents 0x01
+
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        // Read current policy
+        auto service =
+            ipmi::getService(*dbus, selLogIntf, selLogObj);
+        auto policy =
+            ipmi::getDbusProperty(*dbus, service, selLogObj,
+                selLogIntf, "SelPolicy");
+
+        switch (policyType)
+        {
+            case 0:
+                // Do nothing for same policy request
+                if (std::get<std::string>(policy) !=
+                    "xyz.openbmc_project.Logging.Settings.Policy.Linear")
+                {
+                    ipmi::setDbusProperty(*dbus, service, selLogObj,
+                        selLogIntf, "SelPolicy",
+                        std::string("xyz.openbmc_project.Logging.Settings.Policy.Linear"));
+                }
+                break;
+            case 1:
+                // Do nothing for same policy request
+                if (std::get<std::string>(policy) !=
+                    "xyz.openbmc_project.Logging.Settings.Policy.Circular")
+                {
+                    ipmi::setDbusProperty(*dbus, service, selLogObj,
+                        selLogIntf, "SelPolicy",
+                        std::string("xyz.openbmc_project.Logging.Settings.Policy.Circular"));
+                }
+                break;
+            default:
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "SEL policy: invalid type!",
+                    phosphor::logging::entry(
+                        "Request Value=%d", policyType));
+                return ipmi::responseResponseError();
+                break;
+        }
+    }
+    catch (std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to set BMC SEL policy",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+
+    return ipmi::responseSuccess();
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -277,6 +377,27 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdPSUInventoryInfo,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiPSUInventoryInfo);
+
+    // <Get SEL Policy>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetSELPolicy));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdGetSELPolicy,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetSELPolicy);
+
+    // <Set SEL Policy>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetSELPolicy));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSetSELPolicy,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetSELPolicy);
+
     return;
 }
 
