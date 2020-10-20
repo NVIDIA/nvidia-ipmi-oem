@@ -1133,7 +1133,18 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
     eventData.push_back(eventData2.value_or(0xFF));
     eventData.push_back(eventData3.value_or(0xFF));
 
-    std::string sensorPath = getPathFromSensorNumber(sensorNum);
+    std::string sensorPath = "";
+    if(sensorType == static_cast<uint8_t>(SensorTypeCodes::system_firmware_progress))
+    {
+        if(sensorNum == BIOS_SENSOR_NUM)
+        {
+            sensorPath = SYS_FW_BIOS_PATH;
+        }
+    }
+    else
+    {
+        sensorPath = getPathFromSensorNumber(sensorNum);
+    }
 
     auto bus = sdbusplus::bus::new_default();
     auto writeSEL = bus.new_method_call(
