@@ -21,6 +21,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <boost/process/child.hpp>
+
 // Network object in dbus
 const char* networkService = "xyz.openbmc_project.Network";
 const char* networkObj = "/xyz/openbmc_project/network";
@@ -100,6 +102,47 @@ ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
     }
 
     return ipmi::responseSuccess();
+}
+
+template <typename... ArgTypes>
+static int executeCmd(const char* path, ArgTypes&&... tArgs)
+{
+    boost::process::child execProg(path, const_cast<char*>(tArgs)...);
+    execProg.wait();
+    return execProg.exit_code();
+}
+
+
+ipmi::RspType<uint8_t>
+ipmiBF2ResetControl(uint8_t resetOption)
+{
+    int response;
+    switch(resetOption)
+    {
+        case 0x00:
+            response = executeCmd("/usr/bin/env", "powerctrl.sh", "reboot");
+            break;
+        case 0x01:
+            response = executeCmd("/usr/bin/env", "powerctrl.sh", "arm_array_reset");
+            break;
+        case 0x02:
+            response = executeCmd("/usr/bin/env", "powerctrl.sh", "soft_reset");
+            break;
+        case 0x03:
+            response = executeCmd("/usr/bin/env", "powerctrl.sh", "tor_eswitch_reset");
+            break;
+        default:
+            return ipmi::response(ipmi::ccInvalidFieldRequest);
+    }
+
+    if(response)
+    {
+        log<level::ERR>("Reset Command failed.",
+                phosphor::logging::entry("rc= %d", response));
+        return ipmi::response(ipmi::ccResponseError);
+    }
+
+    return ipmi::response(ipmi::ccSuccess);
 }
 
 ipmi::Cc i2cSMBusWriteRead(int i2cdev, const uint8_t slaveAddr, uint8_t devAddr,
@@ -367,6 +410,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdSystemFactoryReset,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSystemFactoryReset);
+
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdBF2ResetControl));
+
+    // <BF2 Reset Control>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdBF2ResetControl,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiBF2ResetControl);
 
     // <PSU Inventory Info>
     log<level::NOTICE>(
