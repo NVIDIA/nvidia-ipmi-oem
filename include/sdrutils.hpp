@@ -195,8 +195,13 @@ enum class SensorTypeCodes : uint8_t
     voltage = 0x2,
     current = 0x3,
     fan = 0x4,
+    system_firmware_progress = 0xF,
     other = 0xB,
 };
+
+const static std::string SYS_FW_BIOS_PATH = "/xyz/openbmc_project/sensors/system_firmware_progress/BIOS";
+const static uint8_t BIOS_SENSOR_NUM = 0x06;
+const static uint8_t SENSOR_SPECIFIC_EVENT = 0x6F;
 
 const static boost::container::flat_map<const char*, SensorTypeCodes, CmpStr>
     sensorTypes{{{"temperature", SensorTypeCodes::temperature},
@@ -227,6 +232,10 @@ inline static std::string getSensorTypeStringFromPath(const std::string& path)
 
 inline static uint8_t getSensorTypeFromPath(const std::string& path)
 {
+    if(path == SYS_FW_BIOS_PATH)
+    {
+        return static_cast<uint8_t>(SensorTypeCodes::system_firmware_progress);
+    }
     uint8_t sensorType = 0;
     std::string type = getSensorTypeStringFromPath(path);
     auto findSensor = sensorTypes.find(type.c_str());
@@ -240,6 +249,10 @@ inline static uint8_t getSensorTypeFromPath(const std::string& path)
 
 inline static uint16_t getSensorNumberFromPath(const std::string& path)
 {
+    if(path == SYS_FW_BIOS_PATH)
+    {
+        return BIOS_SENSOR_NUM;
+    }
     std::shared_ptr<SensorNumMap> sensorNumMapPtr;
     details::getSensorNumMap(sensorNumMapPtr);
     if (!sensorNumMapPtr)
@@ -260,6 +273,10 @@ inline static uint16_t getSensorNumberFromPath(const std::string& path)
 
 inline static uint8_t getSensorEventTypeFromPath(const std::string& path)
 {
+    if(path == SYS_FW_BIOS_PATH)
+    {
+        return SENSOR_SPECIFIC_EVENT;
+    }
     // TODO: Add support for additional reading types as needed
     return 0x1; // reading type = threshold
 }
