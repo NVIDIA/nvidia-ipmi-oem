@@ -15,12 +15,14 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <tuple>
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
-
+#include <bits/stdc++.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/process/child.hpp>
 
 // Network object in dbus
@@ -37,12 +39,81 @@ const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
 const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
 
+// BMC time object in dbus
+const char* timeObj = "/xyz/openbmc_project/time/sync_method";
+const char* timeIntf = "xyz.openbmc_project.Time.Synchronization";
+
+// BMC network object in dbus
+std::string networkNTPObj = "/xyz/openbmc_project/network/eth1";
+std::string networkNTPIntf = "xyz.openbmc_project.Network.EthernetInterface";
+
 void registerNvOemFunctions() __attribute__((constructor));
 
 using namespace phosphor::logging;
 
 namespace ipmi
 {
+
+static std::tuple <int, std::string>
+    execBusctlCmd(std::string cmd)
+{
+    char buffer[128];
+    std::string result = "";
+    std::string command = "busctl ";
+    command += cmd;
+
+    // Open pipe to file
+    FILE* pipe = popen(command.c_str(), "r");
+    if (!pipe) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Exec busctl cmd popen failed!");
+    }
+
+    // Read till end of process
+    while (!feof(pipe)) {
+        // Use buffer to read and add to result
+        if (fgets(buffer, 128, pipe) != NULL)
+            result += buffer;
+    }
+
+    // Return result with exit code
+    int ret = pclose(pipe);
+    return make_tuple(ret, result);
+}
+
+static std::tuple <int, std::string>
+    busctlSetProperty(std::string service,
+                      std::string obj,
+                      std::string inf,
+                      std::string prop,
+                      std::string args)
+{
+    // Set property
+    std::string cmd = "set-property ";
+    cmd += service + " ";
+    cmd += obj + " ";
+    cmd += inf + " ";
+    cmd += prop + " ";
+    cmd += args;
+
+    return execBusctlCmd(cmd);
+}
+
+static std::tuple <int, std::string>
+    busctlGetProperty(std::string service,
+                      std::string obj,
+                      std::string inf,
+                      std::string prop)
+{
+    // Get property
+    std::string cmd = "get-property ";
+    cmd += service + " ";
+    cmd += obj + " ";
+    cmd += inf + " ";
+    cmd += prop;
+
+    return execBusctlCmd(cmd);
+}
 
 ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
 {
@@ -302,6 +373,351 @@ ipmiPSUInventoryInfo(uint8_t psuNum, uint8_t psuInfoSelector)
     return ipmi::responseSuccess(psuInfoSelector, dataReceived);
 }
 
+ipmi::RspType<std::vector<std::string>> ipmiGetDNSConfig()
+{
+    /*
+     * Response data:
+     * Byte 1    : Size N of DNS server string
+     * Byte 2-N  : DNS Server IP, MSB First
+     * Byte N+1  : Size P of next DNS server string
+     * Byte N+2-P: Next DNS Server IP, MSB First
+     */
+    std::vector<std::string> recordData;
+
+    // Get DNS Servers
+    try
+    {
+        int ret;
+        std::string dnsServerStr;
+        std::string networkServiceStr = networkService;
+        // Improvement: Use dbus API for array of strings dbus property type
+        tie(ret, dnsServerStr) = busctlGetProperty(networkServiceStr,
+                                                   networkNTPObj,
+                                                   networkNTPIntf,
+                                                   "StaticNameServers");
+        // Check return code
+        if(ret)
+        {
+            log<level::ERR>("busctl get-property dns servers failed.",
+                phosphor::logging::entry("rc= %d", ret));
+            return ipmi::responseResponseError();
+        }
+        // Parse the result
+        // get-property format: as <size> <dnsserver1> <dnsserver2>
+        std::vector<std::string> dnsServers;
+        boost::split(dnsServers, dnsServerStr, boost::is_any_of(" "));
+        // Populate DNS servers result
+        int dnsCount = stoi(dnsServers[1]);
+        for(int i = 2; i < (2+dnsCount); i++)
+        {
+            std::string dns;
+            if (i == (dnsCount+1))
+            {
+                // Strip trailing `"\n`
+                dns = dnsServers[i].substr(1, dnsServers[i].length() - 3);
+            }
+            else
+            {
+                // Strip trailing `"`
+                dns = dnsServers[i].substr(1, dnsServers[i].length() - 2);
+            }
+            recordData.push_back(dns);
+        }
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get DNS server config",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+    return ipmi::responseSuccess(recordData);
+}
+
+ipmi::RspType<uint8_t> ipmiSetDNSConfig(std::vector<std::string> dnsServers)
+{
+    try
+    {
+        // Add args
+        std::string args = "as ";
+        std::string s = std::to_string(dnsServers.size());
+        // Add array string size
+        args += s;
+        // Add DNS servers
+        for (auto it = dnsServers.begin();
+                it != dnsServers.end(); ++it)
+        {
+            args += " " + *it;
+        }
+        // Improvement: Use dbus API for array of strings dbus property type
+        int ret;
+        std::string dnsServerStr;
+        std::string networkServiceStr = networkService;
+        tie(ret, dnsServerStr) = busctlSetProperty(networkServiceStr,
+                                                   networkNTPObj,
+                                                   networkNTPIntf,
+                                                   "StaticNameServers",
+                                                   args);
+        // Check return code
+        if (ret)
+        {
+            log<level::ERR>("busctl set-property dns servers failed.",
+                phosphor::logging::entry("rc= %d", ret));
+            return ipmi::responseResponseError();
+        }
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to set DNS config",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t,                 // NTP Status
+              std::vector<std::string> // NTP Servers
+              >
+    ipmiGetNTPConfig()
+{
+    /*
+     * Response data:
+     * Byte 1: Enable/Disable/Failure Status of NTP (0x01 / 0x00 / 0x02)
+     * Byte 2    : Size N of primary NTP Server Address
+     * Byte 3-N  : Primary NTP Server Address, MSB First
+     * Byte N+1  : Size P of secondary NTP Server Address
+     * Byte N+2-P: Secondary NTP Server Address, MSB First
+     */
+    uint8_t ntpStatus;
+    std::vector<std::string> recordData;
+
+    // Get NTP status
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        // Check NTP enabled or disabled
+        auto service =
+            ipmi::getService(*dbus, timeIntf, timeObj);
+        auto timeMethod =
+            ipmi::getDbusProperty(*dbus, service, timeObj,
+                timeIntf, "TimeSyncMethod");
+
+        if (std::get<std::string>(timeMethod) ==
+            "xyz.openbmc_project.Time.Synchronization.Method.Manual")
+        {
+            ntpStatus = 0;
+        }
+        else if (std::get<std::string>(timeMethod) ==
+           "xyz.openbmc_project.Time.Synchronization.Method.NTP")
+        {
+            ntpStatus = 1;
+        }
+        else
+        {
+            ntpStatus = 2;
+        }
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get NTP status",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+
+    // Get NTP Servers
+    try
+    {
+        int ret;
+        std::string ntpServerStr;
+        std::string networkServiceStr = networkService;
+        // Improvement: Use dbus API for array of strings dbus property type
+        tie(ret, ntpServerStr) = busctlGetProperty(networkServiceStr,
+                                                   networkNTPObj,
+                                                   networkNTPIntf,
+                                                   "NTPServers");
+        // Check return code
+        if(ret)
+        {
+            log<level::ERR>("busctl get-property ntpservers failed.",
+                phosphor::logging::entry("rc= %d", ret));
+            return ipmi::responseResponseError();
+        }
+        // Parse the result
+        // get-property format: as <size> <ntpserver1> <ntpserver2>
+        std::vector<std::string> ntpServers;
+        boost::split(ntpServers, ntpServerStr, boost::is_any_of(" "));
+        // Check NTP Servers exists
+        if (stoi(ntpServers[1]) > 0)
+        {
+            // Strip trailing `"\n`
+            std::string ntp;
+            if (stoi(ntpServers[1]) > 1)
+            {
+                ntp = ntpServers[2].substr(1, ntpServers[2].length() - 2);
+                recordData.push_back(ntp);
+                ntp = ntpServers[3].substr(1, ntpServers[3].length() - 3);
+                recordData.push_back(ntp);
+            }
+            else
+            {
+                ntp = ntpServers[2].substr(1, ntpServers[2].length() - 3);
+                recordData.push_back(ntp);
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get NTP server config",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+
+    return ipmi::responseSuccess(static_cast<uint8_t>(ntpStatus), recordData);
+}
+
+ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>& ntpserver)
+{
+    /*
+     * Request data:
+     * Byte 1:
+     *   00 -> Set Primary Server IP
+     *   01 -> Set Secondary Server IP
+     *   02 -> Enable/Disable NTP
+     * Byte 2-129: Server Address
+     * Byte 2: 1/0 Enable/Disable NTP Server
+     */
+    try
+    {
+        if (ntpOption == 0x02)
+        {
+            // Enable/Disable NTP
+            if (ntpserver.size() != 1)
+            {
+                return ipmi::responseReqDataLenInvalid();
+            }
+
+            uint8_t enableNTP = ntpserver[0];
+            std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+            auto service = ipmi::getService(*dbus, timeIntf, timeObj);
+
+            if (enableNTP == 1)
+            {
+                ipmi::setDbusProperty(*dbus, service, timeObj,
+                    timeIntf, "TimeSyncMethod",
+                    std::string("xyz.openbmc_project.Time.Synchronization.Method.NTP"));
+            }
+            else if (enableNTP == 0)
+            {
+                ipmi::setDbusProperty(*dbus, service, timeObj,
+                    timeIntf, "TimeSyncMethod",
+                    std::string("xyz.openbmc_project.Time.Synchronization.Method.Manual"));
+            }
+            else
+            {
+                return ipmi::response(ipmi::ccInvalidFieldRequest);
+            }
+        }
+        else if ((ntpOption == 0x00) || (ntpOption == 0x01))
+        {
+            if ((ntpserver.size() > 128) || (ntpserver.size() < 1))
+            {
+                return ipmi::responseReqDataLenInvalid();
+            }
+            // Get NTP servers
+            int ret;
+            std::string ntpServerStr;
+            std::string networkServiceStr = networkService;
+            // Improvement: Use dbus API for array of strings dbus property type
+            tie(ret, ntpServerStr) = busctlGetProperty(networkServiceStr,
+                                                       networkNTPObj,
+                                                       networkNTPIntf,
+                                                       "NTPServers");
+            // Check return code
+            if (ret)
+            {
+                log<level::ERR>("busctl get-property ntpservers failed.",
+                    phosphor::logging::entry("rc= %d", ret));
+                return ipmi::responseResponseError();
+            }
+            std::vector<std::string> ntpServers;
+            std::string pri = "";
+            std::string sec = "";
+            boost::split(ntpServers, ntpServerStr, boost::is_any_of(" "));
+            // Get old primary and secondary
+            // Strip trailing `"\n`
+            if (stoi(ntpServers[1]) > 1)
+            {
+                pri = ntpServers[2].substr(1, ntpServers[2].length() - 2);
+                sec = ntpServers[3].substr(1, ntpServers[3].length() - 3);
+            }
+            else if (stoi(ntpServers[1]) > 0)
+            {
+                pri = ntpServers[2].substr(1, ntpServers[2].length() - 3);
+            }
+            // Get new primary and secondary
+            if (ntpOption == 0x00)
+            {
+                // Set primary NTP
+                std::string newPri(ntpserver.begin(), ntpserver.end());
+                pri = newPri;
+            }
+            else
+            {
+                // Set secondary NTP
+                std::string newSec(ntpserver.begin(), ntpserver.end());
+                if (pri == "")
+                {
+                    pri = newSec;
+                }
+                sec = newSec;
+            }
+            // Add args
+            std::string args = "as ";
+            // Add array string size
+            if (sec == "")
+            {
+                args += "1 ";
+            }
+            else
+            {
+                args += "2 ";
+            }
+            // Add ntpserver strings
+            if (pri != "")
+            {
+                args += pri;
+            }
+            if (sec != "")
+            {
+                args += " " + sec;
+            }
+            // Improvement: Use dbus API for array of strings dbus property type
+            tie(ret, ntpServerStr) = busctlSetProperty(networkServiceStr,
+                                                       networkNTPObj,
+                                                       networkNTPIntf,
+                                                       "NTPServers",
+                                                       args);
+            // Check return code
+            if (ret)
+            {
+                log<level::ERR>("busctl set-property ntpservers failed.",
+                    phosphor::logging::entry("rc= %d", ret));
+                return ipmi::responseResponseError();
+            }
+        }
+        else
+        {
+            return ipmi::response(ipmi::ccInvalidFieldRequest);
+        }
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to set NTP config",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+    return ipmi::responseSuccess();
+}
+
 ipmi::RspType<uint8_t> ipmiGetSELPolicy()
 {
     // SEL policy:
@@ -420,6 +836,46 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdBF2ResetControl,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiBF2ResetControl);
+
+    // <Get DNS Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetDNSConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdGetDNSConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetDNSConfig);
+
+    // <Set DNS Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetDNSConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSetDNSConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetDNSConfig);
+
+    // <Get NTP Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetNTPConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdGetNTPConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetNTPConfig);
+
+    // <Set NTP Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetNTPConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSetNTPConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetNTPConfig);
 
     // <PSU Inventory Info>
     log<level::NOTICE>(
