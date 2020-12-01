@@ -10,6 +10,11 @@ set (CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 option (USING_ENTITY_MANAGER_DECORATORS
         "Enable using EM decorators to map FRUs to entity IDs" ON)
 
+option (USE_ETH1_NETWORK_DEVICE
+        "Use 'eth1' network device for ntp and dns settings,
+         instead of using default 'eth0' device"
+        OFF)
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -73,4 +78,10 @@ target_compile_definitions (
     znvipmioemcmds PRIVATE
     $<$<BOOL:${USING_ENTITY_MANAGER_DECORATORS}>:
     -DUSING_ENTITY_MANAGER_DECORATORS>
+)
+
+target_compile_definitions (
+    znvipmioemcmds PRIVATE
+    $<$<BOOL:${USE_ETH1_NETWORK_DEVICE}>:
+    -DUSE_ETH1_NETWORK_DEVICE>
 )
