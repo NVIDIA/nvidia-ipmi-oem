@@ -190,17 +190,17 @@ ipmiBF2ResetControl(uint8_t resetOption)
     int response;
     switch(resetOption)
     {
-        case 0x00:
-            response = executeCmd("/usr/bin/env", "powerctrl.sh", "reboot");
+        case 0x00: // soc hard reset
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "soc_hard_reset");
             break;
-        case 0x01:
-            response = executeCmd("/usr/bin/env", "powerctrl.sh", "arm_array_reset");
+        case 0x01: // arm hard reset - nsrst
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "arm_hard_reset");
             break;
-        case 0x02:
-            response = executeCmd("/usr/bin/env", "powerctrl.sh", "soft_reset");
+        case 0x02: // arm soft reset
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "arm_soft_reset");
             break;
-        case 0x03:
-            response = executeCmd("/usr/bin/env", "powerctrl.sh", "tor_eswitch_reset");
+        case 0x03: // tor eswitch reset
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "do_tor_eswitch_reset");
             break;
         default:
             return ipmi::response(ipmi::ccInvalidFieldRequest);
