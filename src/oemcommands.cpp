@@ -44,7 +44,11 @@ const char* timeObj = "/xyz/openbmc_project/time/sync_method";
 const char* timeIntf = "xyz.openbmc_project.Time.Synchronization";
 
 // BMC network object in dbus
-std::string networkNTPObj = "/xyz/openbmc_project/network/eth1";
+#if USE_ETH1_NETWORK_DEVICE
+   std::string networkNTPObj = "/xyz/openbmc_project/network/eth1";
+#else
+   std::string networkNTPObj = "/xyz/openbmc_project/network/eth0";
+#endif
 std::string networkNTPIntf = "xyz.openbmc_project.Network.EthernetInterface";
 
 void registerNvOemFunctions() __attribute__((constructor));
