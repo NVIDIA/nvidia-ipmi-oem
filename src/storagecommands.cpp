@@ -869,10 +869,15 @@ ipmi::RspType<uint8_t,  // SEL version
     uint32_t addTimeStamp = nvidia_oem::ipmi::sel::getFileTimestamp(
         nvidia_oem::ipmi::sel::selLogDir / nvidia_oem::ipmi::sel::selLogFilename);
     uint32_t eraseTimeStamp = nvidia_oem::ipmi::sel::erase_time::get();
-    constexpr uint8_t operationSupport =
-        nvidia_oem::ipmi::sel::selOperationSupport;
-    constexpr uint16_t freeSpace =
-        0xffff; // Spec indicates that more than 64kB is free
+    uint8_t operationSupport = nvidia_oem::ipmi::sel::selOperationSupport;
+    // Update overflow bit
+    if (entries >= nvidia_oem::ipmi::sel::maxSELEntries)
+    {
+        operationSupport |= nvidia_oem::ipmi::sel::selOverFlow;
+    }
+    // Update free space
+    uint16_t freeSpace =
+        nvidia_oem::ipmi::sel::maxSELEntries - entries;
 
     return ipmi::responseSuccess(selVersion, entries, freeSpace, addTimeStamp,
                                  eraseTimeStamp, operationSupport);
