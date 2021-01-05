@@ -1226,15 +1226,15 @@ ipmi::RspType<uint8_t> ipmiStorageClearSEL(ipmi::Context::ptr ctx,
         }
     }
 
-    // Reload rsyslog so it knows to start new log files
+    // Reload IPMI SEL Logging Service so it refreshes sel event id
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-    sdbusplus::message::message rsyslogReload = dbus->new_method_call(
+    sdbusplus::message::message selReload = dbus->new_method_call(
         "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
         "org.freedesktop.systemd1.Manager", "RestartUnit");
-    rsyslogReload.append("rsyslog.service", "replace");
+    selReload.append("xyz.openbmc_project.Logging.IPMI.service", "replace");
     try
     {
-        sdbusplus::message::message reloadResponse = dbus->call(rsyslogReload);
+        sdbusplus::message::message reloadResponse = dbus->call(selReload);
     }
     catch (sdbusplus::exception_t& e)
     {
