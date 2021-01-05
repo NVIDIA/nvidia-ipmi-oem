@@ -1146,6 +1146,7 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
         sensorPath = getPathFromSensorNumber(sensorNum);
     }
 
+    uint16_t responseID = 0xFFFF;
     auto bus = sdbusplus::bus::new_default();
     auto writeSEL = bus.new_method_call(
                     ipmiSELObj, ipmiSELPath, ipmiSELAddInterface, "IpmiSelAdd");
@@ -1153,7 +1154,8 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
 
     try
     {
-        bus.call(writeSEL);
+        auto res = bus.call(writeSEL);
+        res.read(responseID);
     }
     catch (sdbusplus::exception_t &e)
     {
@@ -1163,7 +1165,12 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
         return ipmi::responseUnspecifiedError();
     }
 
-    uint16_t responseID = 0xFFFF;
+    if (responseID == 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Add SEL Entry failed: Out of space");
+        return ipmi::responseOutOfSpace();
+    }
     return ipmi::responseSuccess(responseID);
 }
 
