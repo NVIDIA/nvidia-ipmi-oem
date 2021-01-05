@@ -869,10 +869,15 @@ ipmi::RspType<uint8_t,  // SEL version
     uint32_t addTimeStamp = nvidia_oem::ipmi::sel::getFileTimestamp(
         nvidia_oem::ipmi::sel::selLogDir / nvidia_oem::ipmi::sel::selLogFilename);
     uint32_t eraseTimeStamp = nvidia_oem::ipmi::sel::erase_time::get();
-    constexpr uint8_t operationSupport =
-        nvidia_oem::ipmi::sel::selOperationSupport;
-    constexpr uint16_t freeSpace =
-        0xffff; // Spec indicates that more than 64kB is free
+    uint8_t operationSupport = nvidia_oem::ipmi::sel::selOperationSupport;
+    // Update overflow bit
+    if (entries >= nvidia_oem::ipmi::sel::maxSELEntries)
+    {
+        operationSupport |= nvidia_oem::ipmi::sel::selOverFlow;
+    }
+    // Update free space
+    uint16_t freeSpace =
+        nvidia_oem::ipmi::sel::maxSELEntries - entries;
 
     return ipmi::responseSuccess(selVersion, entries, freeSpace, addTimeStamp,
                                  eraseTimeStamp, operationSupport);
@@ -1146,6 +1151,7 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
         sensorPath = getPathFromSensorNumber(sensorNum);
     }
 
+    uint16_t responseID = 0xFFFF;
     auto bus = sdbusplus::bus::new_default();
     auto writeSEL = bus.new_method_call(
                     ipmiSELObj, ipmiSELPath, ipmiSELAddInterface, "IpmiSelAdd");
@@ -1153,7 +1159,8 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
 
     try
     {
-        bus.call(writeSEL);
+        auto res = bus.call(writeSEL);
+        res.read(responseID);
     }
     catch (sdbusplus::exception_t &e)
     {
@@ -1163,7 +1170,12 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(
         return ipmi::responseUnspecifiedError();
     }
 
-    uint16_t responseID = 0xFFFF;
+    if (responseID == 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Add SEL Entry failed: Out of space");
+        return ipmi::responseOutOfSpace();
+    }
     return ipmi::responseSuccess(responseID);
 }
 
@@ -1214,15 +1226,15 @@ ipmi::RspType<uint8_t> ipmiStorageClearSEL(ipmi::Context::ptr ctx,
         }
     }
 
-    // Reload rsyslog so it knows to start new log files
+    // Reload IPMI SEL Logging Service so it refreshes sel event id
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-    sdbusplus::message::message rsyslogReload = dbus->new_method_call(
+    sdbusplus::message::message selReload = dbus->new_method_call(
         "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
         "org.freedesktop.systemd1.Manager", "RestartUnit");
-    rsyslogReload.append("rsyslog.service", "replace");
+    selReload.append("xyz.openbmc_project.Logging.IPMI.service", "replace");
     try
     {
-        sdbusplus::message::message reloadResponse = dbus->call(rsyslogReload);
+        sdbusplus::message::message reloadResponse = dbus->call(selReload);
     }
     catch (sdbusplus::exception_t& e)
     {
