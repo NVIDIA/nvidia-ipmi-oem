@@ -242,7 +242,7 @@ void replaceCacheFru(const std::shared_ptr<sdbusplus::asio::connection>& bus,
     if (ec)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-            "GetMangagedObjects for getSensorMap failed",
+            "GetMangagedObjects for fruDeviceServiceName failed",
             phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
 
         return;
@@ -618,7 +618,7 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
     if (ec)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-            "GetMangagedObjects for getSensorMap failed",
+            "GetMangagedObjects for entityManagerServiceName failed",
             phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
 
         return ipmi::ccResponseError;
