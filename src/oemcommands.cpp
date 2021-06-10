@@ -35,6 +35,9 @@ const char* sftBMCService = "xyz.openbmc_project.Software.BMC.Updater";
 const char* sftBMCObj = "/xyz/openbmc_project/software";
 const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 
+const char* sftVendorFieldModeService = "xyz.openbmc_project.Software.BMC.VendorFieldModeService";
+std::string sftBMCVendorFieldModeIntf = "xyz.openbmc_project.Common.VendorFieldMode";
+
 // SEL policy in dbus
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
 const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
@@ -823,6 +826,85 @@ ipmi::RspType<> ipmiSetSELPolicy(uint8_t policyType)
     return ipmi::responseSuccess();
 }
 
+ipmi::RspType<> ipmiSetVendorFieldModeConfig(boost::asio::yield_context yield, uint8_t setEnabled)
+{
+
+    /*
+     * BMC set vendor field mode is used to set the state of
+     * vendor field mode in the u-boot-env.
+     * State can be either Enabled if the status is set to true,
+     * or Disbaled if the status is set to false.
+     */
+    /*
+     * Request data:
+     * Byte 1:
+     *   00 -> Disable Vendor Field Mode
+     *   01 -> Enable Vendor Field Mode
+    */
+
+    auto sdbusp = getSdBus();
+    boost::system::error_code ec;
+
+    try
+    {
+        bool status{false};
+
+        if (setEnabled != 0x00 && setEnabled != 0x01)
+        {
+            return ipmi::response(ipmi::ccInvalidFieldRequest);
+        }
+
+        status = (setEnabled) ? true: false;
+
+        sdbusp->yield_method_call<void>(
+            yield, ec,
+            sftVendorFieldModeService,
+            sftBMCObj,
+            sftBMCVendorFieldModeIntf,
+            "SetVendorFieldModeStatus",
+            status);
+
+        if (ec)
+        {
+            phosphor::logging::log<level::ERR>("Unspecified Error on BMC set vendor field mode");
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t> ipmiGetVendorFieldModeConfig(boost::asio::yield_context yield)
+{
+    /*
+     * Response data:
+     * Byte 1    : 0x01 if field mode set Enabled or 0x00.
+    */
+
+    auto sdbusp = getSdBus();
+    boost::system::error_code ec;
+    bool status = false;
+    try
+    {
+        status = sdbusp->yield_method_call<bool>(
+                    yield, ec,
+                    sftVendorFieldModeService,
+                    sftBMCObj,
+                    sftBMCVendorFieldModeIntf,
+                    "IsVendorFieldModeEnabled");
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(status);
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -917,6 +999,25 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetSELPolicy);
 
+    // <Get Field Mode Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetVendorFieldModeConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdGetVendorFieldModeConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetVendorFieldModeConfig);
+
+    // <Set Field Mode Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetVendorFieldModeConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSetVendorFieldModeConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetVendorFieldModeConfig);
+
     return;
 }
-

@@ -15,6 +15,8 @@ constexpr auto netFnOemGlobal = 0x32;
 namespace app
 {
 constexpr auto cmdSystemFactoryReset = 0x66;
+constexpr auto cmdSetVendorFieldModeConfig = 0x67;
+constexpr auto cmdGetVendorFieldModeConfig = 0x68;
 constexpr auto cmdPSUInventoryInfo = 0x0E;
 constexpr auto cmdGetSELPolicy = 0x7E;
 constexpr auto cmdSetSELPolicy = 0x7F;
