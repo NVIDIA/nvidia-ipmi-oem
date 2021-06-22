@@ -206,6 +206,12 @@ ipmiBF2ResetControl(uint8_t resetOption)
         case 0x03: // tor eswitch reset
             response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "do_tor_eswitch_reset");
             break;
+        case 0x04: // arm hard reset - nsrst - secondary DPU
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "bf2_nic_bmc_ctrl1");
+            break;
+        case 0x05: // arm soft reset - secondary DPU
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "bf2_nic_bmc_ctrl0");
+            break;
         default:
             return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
