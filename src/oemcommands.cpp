@@ -36,6 +36,7 @@ const char* sftBMCObj = "/xyz/openbmc_project/software";
 const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 
 const char* sftVendorFieldModeService = "xyz.openbmc_project.Software.BMC.VendorFieldModeService";
+const char* vendorFieldModeBMCObj = "/xyz/openbmc_project/software/vendorfieldmode";
 std::string sftBMCVendorFieldModeIntf = "xyz.openbmc_project.Common.VendorFieldMode";
 
 // SEL policy in dbus
@@ -859,7 +860,7 @@ ipmi::RspType<> ipmiSetVendorFieldModeConfig(boost::asio::yield_context yield, u
         sdbusp->yield_method_call<void>(
             yield, ec,
             sftVendorFieldModeService,
-            sftBMCObj,
+            vendorFieldModeBMCObj,
             sftBMCVendorFieldModeIntf,
             "SetVendorFieldModeStatus",
             status);
@@ -893,7 +894,7 @@ ipmi::RspType<uint8_t> ipmiGetVendorFieldModeConfig(boost::asio::yield_context y
         status = sdbusp->yield_method_call<bool>(
                     yield, ec,
                     sftVendorFieldModeService,
-                    sftBMCObj,
+                    vendorFieldModeBMCObj,
                     sftBMCVendorFieldModeIntf,
                     "IsVendorFieldModeEnabled");
     }
