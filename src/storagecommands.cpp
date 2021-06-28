@@ -611,6 +611,8 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
     {
         return IPMI_CC_RESPONSE_ERROR;
     }
+    
+    std::string name;
 
 #ifdef USING_ENTITY_MANAGER_DECORATORS
 
@@ -633,7 +635,7 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
 
     auto entity = std::find_if(
         entities.begin(), entities.end(),
-        [bus, address, &entityData](ManagedEntry& entry) {
+        [bus, address, &entityData, &name](ManagedEntry& entry) {
             auto findFruDevice = entry.second.find(
                 "xyz.openbmc_project.Inventory.Decorator.FruDevice");
             if (findFruDevice == entry.second.end())
@@ -655,6 +657,12 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
                 (std::get<uint64_t>(findAddress->second) != address))
             {
                 return false;
+            }
+
+            auto fruName = findFruDevice->second.find("Name");
+            if (fruName != findFruDevice->second.end())
+            {
+                name = std::get<std::string>(fruName->second);
             }
 
             // At this point we found the device entry and should return
@@ -680,21 +688,24 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
 
 #endif
 
-    std::string name;
-    auto findProductName = fruData->find("BOARD_PRODUCT_NAME");
-    auto findBoardName = fruData->find("PRODUCT_PRODUCT_NAME");
-    if (findProductName != fruData->end())
+    if (name.empty())
     {
-        name = std::get<std::string>(findProductName->second);
+        auto findProductName = fruData->find("BOARD_PRODUCT_NAME");
+        auto findBoardName = fruData->find("PRODUCT_PRODUCT_NAME");
+        if (findProductName != fruData->end())
+        {
+            name = std::get<std::string>(findProductName->second);
+        }
+        else if (findBoardName != fruData->end())
+        {
+            name = std::get<std::string>(findBoardName->second);
+        }
+        else
+        {
+            name = "UNKNOWN";
+        }
     }
-    else if (findBoardName != fruData->end())
-    {
-        name = std::get<std::string>(findBoardName->second);
-    }
-    else
-    {
-        name = "UNKNOWN";
-    }
+
     if (name.size() > maxFruSdrNameSize)
     {
         name = name.substr(0, maxFruSdrNameSize);
