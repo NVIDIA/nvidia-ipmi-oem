@@ -1332,6 +1332,94 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
         status, res[0], res[1], res[2], res[3], extRes[0], extRes[1], extRes[2], extRes[3]);
 }
 
+ipmi::RspType<uint8_t>
+ipmiSetAllFanZonesPWMDuty(uint8_t request)
+{
+
+    int value = 255;
+	if ((request%10 == 0) && (request <= 100) && (request >= 20))
+	{
+		value = value*request/100;
+		std::ofstream ofs;
+		for(int i=6; i<=7; i++)
+		{
+			std::string path("/sys/class/hwmon/");
+			path = path + "hwmon" + std::to_string(i) + "/pwm1";
+			if (!ofs.is_open())
+			{
+				ofs.open(path);
+			}
+			ofs.clear();
+			ofs.seekp(0);
+			ofs << value;
+			ofs.close();
+		}
+		return ipmi::responseSuccess();
+	}
+	else
+	{
+		return ipmi::response(ipmi::ccInvalidFieldRequest);
+    }
+}
+
+ipmi::RspType<uint8_t, std::vector<uint8_t>>
+ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t request)
+{
+	int value = 255;
+	if(zone == 0x00)
+	{
+		return ipmi::responseSuccess();
+	}
+	else if(zone == 0x01)
+	{
+		if ((request%10 == 0) && (request <= 100) && (request >= 20))
+		{
+			value = value*request/100;
+			std::ofstream ofs;
+			std::string path("/sys/class/hwmon/hwmon6/pwm1");
+			if (!ofs.is_open())
+			{
+				ofs.open(path);
+			}
+			ofs.clear();
+			ofs.seekp(0);
+			ofs << value;
+			ofs.close();
+			return ipmi::responseSuccess();
+		}
+		else
+		{
+			return ipmi::response(ipmi::ccInvalidFieldRequest);
+		}
+	}
+	else if(zone == 0x02)
+	{
+		if ((request%10 == 0) && (request <= 100) && (request >= 20))
+		{
+			value = value*request/100;
+			std::ofstream ofs;
+			std::string path("/sys/class/hwmon/hwmon7/pwm1");
+			if (!ofs.is_open())
+			{
+				ofs.open(path);
+			}
+			ofs.clear();
+			ofs.seekp(0);
+			ofs << value;
+			ofs.close();
+			return ipmi::responseSuccess();
+		}
+		else
+		{
+			return ipmi::response(ipmi::ccInvalidFieldRequest);
+		}
+	}
+	else
+	{
+		return ipmi::response(ipmi::ccInvalidFieldRequest);
+	}
+}
+
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1514,6 +1602,26 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdSMBPBIPassthroughExtended,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughExtendedCmd);
+
+    // <Set All Fan Zones PWM Duty>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemFan),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdAllFanZonesPWMDuty));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemFan,
+                          ipmi::nvidia::app::cmdAllFanZonesPWMDuty,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetAllFanZonesPWMDuty);
+
+    // <Set Fan Zone PWM Duty>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemFan),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetFanZonePWMDuty));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemFan,
+                          ipmi::nvidia::app::cmdSetFanZonePWMDuty,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetFanZonePWMDuty);
 
     return;
 }
