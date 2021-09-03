@@ -39,6 +39,11 @@ const char* sftVendorFieldModeService = "xyz.openbmc_project.Software.BMC.Vendor
 const char* vendorFieldModeBMCObj = "/xyz/openbmc_project/software/vendorfieldmode";
 std::string sftBMCVendorFieldModeIntf = "xyz.openbmc_project.Common.VendorFieldMode";
 
+//dbus names for interacting with systemd
+const char* systemdService = "org.freedesktop.systemd1";
+const char* systemdUnitIntf = "org.freedesktop.systemd1.Unit";
+const char* rshimSystemdObj = "/org/freedesktop/systemd1/unit/rshim_2eservice";
+
 // SEL policy in dbus
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
 const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
@@ -906,8 +911,84 @@ ipmi::RspType<uint8_t> ipmiGetVendorFieldModeConfig(boost::asio::yield_context y
     return ipmi::responseSuccess(status);
 }
 
-} // namespace ipmi
+ipmi::RspType<> ipmiSetRshimState(uint8_t newState)
+{
+    /*
+     * Change rshim service state.
+     */
+    /*
+     * Request data:
+     * Byte 1:
+     *   00 -> Stop Rshim
+     *   01 -> Start Rshim 
+    */
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    std::string systemdCmd;
 
+    switch (newState)
+    {
+    case 0 : //Stop
+        systemdCmd = "Stop";
+        break;
+
+    case 1 : //Start
+        systemdCmd = "Start";
+        break;
+
+    default: //Error
+        log<level::ERR>("Unsupported argument",
+            phosphor::logging::entry("Requested State=%d", newState));
+        return ipmi::responseInvalidFieldRequest();
+        break;
+    }
+
+    try
+    {
+        sdbusplus::message::message rshimControl = dbus->new_method_call(
+            systemdService, rshimSystemdObj,
+            systemdUnitIntf, systemdCmd.c_str());
+        rshimControl.append("replace");
+        sdbusplus::message::message reloadResponse = dbus->call(rshimControl);
+    }
+    catch (sdbusplus::exception_t& e)
+    {
+        log<level::ERR>("Failed to change Rshim service state",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t> ipmiGetRshimState()
+{
+    /*
+     * Response data:
+     * Byte 1    : 0x01 if rshim service is running or 0x00 otherwise.
+    */
+
+    auto sdbusp = getSdBus();
+    bool status = false;
+    try
+    {
+        auto rshimActiveState =
+            ipmi::getDbusProperty(*sdbusp, systemdService, rshimSystemdObj,
+                systemdUnitIntf, "ActiveState");
+
+        status = (std::get<std::string>(rshimActiveState) == "active");
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get Rshim service status",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(status);
+}
+
+
+} // namespace ipmi
 void registerNvOemFunctions()
 {
     log<level::NOTICE>(
@@ -1019,6 +1100,26 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdSetVendorFieldModeConfig,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetVendorFieldModeConfig);
+
+    // <Get RSHIM state>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetRshimState));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdGetRshimState,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetRshimState);
+
+    // <Start/Stop RSHIM service>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetRshimState));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSetRshimState,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetRshimState);
 
     return;
 }
