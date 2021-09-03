@@ -60,6 +60,10 @@ const char* timeIntf = "xyz.openbmc_project.Time.Synchronization";
 #endif
 std::string networkNTPIntf = "xyz.openbmc_project.Network.EthernetInterface";
 
+// IPMI OEM Major and Minor version
+static constexpr uint8_t OEM_MAJOR_VER = 0x01;
+static constexpr uint8_t OEM_MINOR_VER = 0x00;
+
 void registerNvOemFunctions() __attribute__((constructor));
 
 using namespace phosphor::logging;
@@ -920,7 +924,7 @@ ipmi::RspType<> ipmiSetRshimState(uint8_t newState)
      * Request data:
      * Byte 1:
      *   00 -> Stop Rshim
-     *   01 -> Start Rshim 
+     *   01 -> Start Rshim
     */
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
     std::string systemdCmd;
@@ -987,6 +991,13 @@ ipmi::RspType<uint8_t> ipmiGetRshimState()
     return ipmi::responseSuccess(status);
 }
 
+ipmi::RspType<
+    uint8_t,  // Major Version
+    uint8_t  // Minor Version
+    > ipmiGetOEMVersion()
+{
+    return ipmi::responseSuccess(OEM_MAJOR_VER, OEM_MINOR_VER);
+}
 
 } // namespace ipmi
 void registerNvOemFunctions()
@@ -1120,6 +1131,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdSetRshimState,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetRshimState);
+
+    // <Get IPMI OEM Version>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetOEMVersion));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetOEMVersion,
+                          ipmi::Privilege::User,
+                          ipmi::ipmiGetOEMVersion);
 
     return;
 }

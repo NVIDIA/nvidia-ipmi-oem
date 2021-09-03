@@ -11,6 +11,7 @@ namespace ipmi
 namespace nvidia
 {
 constexpr auto netFnOemGlobal = 0x32;
+constexpr auto netFnOemNV = 0x3C;
 
 namespace app
 {
@@ -29,6 +30,12 @@ constexpr auto cmdGetDNSConfig = 0x6B;
 constexpr auto cmdSetDNSConfig = 0x6C;
 
 } // namespace app
+
+namespace misc
+{
+constexpr auto cmdGetOEMVersion = 0x01;
+
+} // namespace misc
 
 namespace chassis
 {
