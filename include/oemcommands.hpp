@@ -34,6 +34,7 @@ constexpr auto cmdSetDNSConfig = 0x6C;
 namespace misc
 {
 constexpr auto cmdGetOEMVersion = 0x01;
+constexpr auto cmdGetFwBootupSlot = 0x03;
 
 } // namespace misc
 

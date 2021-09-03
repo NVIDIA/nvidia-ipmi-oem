@@ -999,6 +999,67 @@ ipmi::RspType<
     return ipmi::responseSuccess(OEM_MAJOR_VER, OEM_MINOR_VER);
 }
 
+ipmi::RspType<uint8_t> ipmiGetFwBootupSlot(uint8_t FwType)
+{
+    switch (FwType)
+    {
+        case 0x00: // BMC
+        {
+            // TODO: Enable i2cWriteRead on actual hardware
+            /*
+            std::string i2cBus = "/dev/i2c-1";
+            // Open the i2c device, for low-level combined data write/read
+            int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
+            if (i2cDev < 0)
+            {
+                log<level::ERR>("Failed to open i2c bus",
+                    phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
+                return ipmi::responseInvalidFieldRequest();
+            }
+            uint7_t slaveAddr = 0x55;
+            std::vector<uint8_t> writeData={0x00, 0x9B};
+            static const constexpr size_t bufLen = 7;
+            std::vector<uint8_t> readBuf(bufLen);
+
+            ipmi::Cc ret = ipmi::i2cWriteRead(i2cBus,
+                static_cast<uint8_t>(slaveAddr), writeData, readBuf);
+
+            ::close(i2cDev);
+
+            if (ret != ipmi::ccSuccess)
+            { 
+                return ipmi::response(ret);
+            }
+
+            if (0x00 == readBuf[0])
+            {
+                if ((0x01 == readBuf[1]) || (0x02 == readBuf[2]) || (0x05 == readBuf[3]))
+                {
+                    return ipmi::responseSuccess(static_cast<uint8_t>(0));
+                }
+                else if ((0x03 == readBuf[4]) || (0x04 == readBuf[5]) || (0x06 == readBuf[6]))
+                {
+                    return ipmi::responseSuccess(static_cast<uint8_t>(1));
+                }
+                else
+                {
+                    return ipmi::responseResponseError();
+                }
+            }
+            else
+            {
+                return ipmi::responseResponseError();
+            }
+            */
+            return ipmi::responseSuccess(static_cast<uint8_t>(0));
+        }
+        break;
+
+        default:
+            return ipmi::responseParmOutOfRange();
+    }
+}
+
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1141,6 +1202,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetOEMVersion,
                           ipmi::Privilege::User,
                           ipmi::ipmiGetOEMVersion);
+
+    // <Get FW Bootup slot>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetFwBootupSlot));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetFwBootupSlot,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetFwBootupSlot);
 
     return;
 }
