@@ -174,7 +174,8 @@ static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
         auto maxMap = sensorObject->second.find("MaxValue");
         auto minMap = sensorObject->second.find("MinValue");
 
-        if (maxMap != sensorObject->second.end())
+        if ((maxMap != sensorObject->second.end()) && (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), maxMap->second))))
         {
             max = std::visit(VariantToDoubleVisitor(), maxMap->second);
         }
@@ -1160,7 +1161,9 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         // then default to what a signed byte would be, namely (-128,127) range.
         auto max = static_cast<double>(std::numeric_limits<int8_t>::max());
         auto min = static_cast<double>(std::numeric_limits<int8_t>::lowest());
-        if (maxObject != sensorObject->second.end())
+        if ((maxObject != sensorObject->second.end())
+            && (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), maxObject->second))))
         {
             max = std::visit(VariantToDoubleVisitor(), maxObject->second);
         }
@@ -1263,7 +1266,7 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         }
         catch (std::exception&)
         {
-            return GENERAL_ERROR;
+            // return GENERAL_ERROR;
         }
 
         if (thresholdData.criticalHigh)
@@ -1606,9 +1609,7 @@ ipmi::RspType<uint16_t,            // next record ID
         return ipmi::response(ret);
     }
 
-    size_t lastRecord = sensorTree.size() + fruCount +
-                        ipmi::storage::type12Count +
-                        ipmi::storage::nmDiscoverySDRCount - 1;
+    size_t lastRecord = sensorDataRecords.size() - 1;
     if (recordID == lastRecordIndex)
     {
         recordID = lastRecord;
