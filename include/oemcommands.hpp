@@ -35,6 +35,7 @@ namespace misc
 {
 constexpr auto cmdGetOEMVersion = 0x01;
 constexpr auto cmdGetFwBootupSlot = 0x03;
+constexpr auto cmdGetBMCBootComplete = 0x05;
 
 } // namespace misc
 

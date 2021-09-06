@@ -43,6 +43,11 @@ std::string sftBMCVendorFieldModeIntf = "xyz.openbmc_project.Common.VendorFieldM
 const char* systemdService = "org.freedesktop.systemd1";
 const char* systemdUnitIntf = "org.freedesktop.systemd1.Unit";
 const char* rshimSystemdObj = "/org/freedesktop/systemd1/unit/rshim_2eservice";
+// BMC state object in dbus
+static constexpr const char* bmcStateIntf = "xyz.openbmc_project.State.BMC";
+static constexpr const char* currentBmcStateProp = "CurrentBMCState";
+static constexpr const char* bmcStateReadyStr =
+    "xyz.openbmc_project.State.BMC.BMCState.Ready";
 
 // SEL policy in dbus
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
@@ -1027,7 +1032,7 @@ ipmi::RspType<uint8_t> ipmiGetFwBootupSlot(uint8_t FwType)
             ::close(i2cDev);
 
             if (ret != ipmi::ccSuccess)
-            { 
+            {
                 return ipmi::response(ret);
             }
 
@@ -1058,6 +1063,45 @@ ipmi::RspType<uint8_t> ipmiGetFwBootupSlot(uint8_t FwType)
         default:
             return ipmi::responseParmOutOfRange();
     }
+}
+
+ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
+{
+    /*
+     * Response data:
+     * Byte 1    : 0x00 if BMC boot complete.
+     *           : 0x01 if BMC boot un-complete.
+    */
+
+    DbusObjectInfo objInfo;
+    boost::system::error_code ec =
+        ipmi::getDbusObject(ctx, bmcStateIntf, "/", "bmc0", objInfo);
+    if (ec)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBMCBootComplete: Failed to perform GetSubTree action",
+            phosphor::logging::entry("ERROR=%s", ec.message().c_str()),
+            phosphor::logging::entry("INTERFACE=%s", bmcStateIntf));
+        return ipmi::responseResponseError();
+    }
+
+    std::string bmcState;
+    ec = ipmi::getDbusProperty(ctx, objInfo.second, objInfo.first, bmcStateIntf,
+                               currentBmcStateProp, bmcState);
+    if (ec)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBMCBootComplete: Failed to get CurrentBMCState property",
+            phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
+        return ipmi::responseResponseError();
+    }
+
+    if (bmcState == bmcStateReadyStr)
+    {
+        return ipmi::responseSuccess(static_cast<uint8_t>(0));
+    }
+
+    return ipmi::responseSuccess(static_cast<uint8_t>(1));
 }
 
 } // namespace ipmi
@@ -1212,6 +1256,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetFwBootupSlot,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetFwBootupSlot);
+
+    // <Get BMC Boot complete>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBMCBootComplete));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetBMCBootComplete,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetBMCBootComplete);
 
     return;
 }
