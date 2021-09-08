@@ -948,7 +948,7 @@ ipmi::RspType<> ipmiSetRshimState(uint8_t newState)
             systemdService, rshimSystemdObj,
             systemdUnitIntf, systemdCmd.c_str());
         rshimControl.append("replace");
-        sdbusplus::message::message reloadResponse = dbus->call(rshimControl);
+        dbus->call_noreply(rshimControl);
     }
     catch (sdbusplus::exception_t& e)
     {
