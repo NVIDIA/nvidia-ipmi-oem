@@ -41,6 +41,7 @@ constexpr auto cmdGetFwBootupSlot = 0x03;
 constexpr auto cmdGetBMCBootComplete = 0x05;
 constexpr auto cmdSMBPBIPassthrough = 0x09;
 constexpr auto cmdSMBPBIPassthroughExtended = 0x0A;
+constexpr auto cmdGetPSUInventory = 0x0E;
 
 } // namespace misc
 

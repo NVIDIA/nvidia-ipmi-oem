@@ -69,6 +69,10 @@ const char* timeIntf = "xyz.openbmc_project.Time.Synchronization";
 #endif
 std::string networkNTPIntf = "xyz.openbmc_project.Network.EthernetInterface";
 
+// PSU Inventory
+static constexpr const std::array<const char*, 1> psuIntf = {
+    "xyz.openbmc_project.Inventory.Item.PowerSupply"};
+
 // IPMI OEM Major and Minor version
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
 static constexpr uint8_t OEM_MINOR_VER = 0x00;
@@ -76,6 +80,13 @@ static constexpr uint8_t OEM_MINOR_VER = 0x00;
 void registerNvOemFunctions() __attribute__((constructor));
 
 using namespace phosphor::logging;
+
+using GetSubTreeType = std::vector<
+    std::pair<std::string,
+        std::vector<std::pair<std::string, std::vector<std::string>>>>>;
+using BasicVariantType = std::variant<std::string>;
+using PropertyMapType =
+    boost::container::flat_map<std::string, BasicVariantType>;
 
 namespace ipmi
 {
@@ -1420,6 +1431,113 @@ ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t request)
 	}
 }
 
+ipmi::RspType<uint8_t, std::string> ipmiGetPSUInventory(
+    ipmi::Context::ptr ctx,
+    uint8_t psuNumber,
+    uint8_t psuInfo)
+{
+    /*
+     * Request data:
+     * Byte 1: PSU Number
+     * Byte 2: PSU Info
+     *         00h: Serial Number
+     *         01h: Part Number
+     *         02h: Manufacturer
+     *         03h: Revision
+     */
+
+    /*
+     * Response data:
+     * Byte 1: PSU Info
+     *         00h: Serial Number
+     *         01h: Part Number
+     *         02h: Manufacturer
+     *         03h: Revision
+     * Byte Array 2~N: [2] string size and [3:N] string content
+     */
+
+    boost::system::error_code ec;
+    GetSubTreeType subtree = ctx->bus->yield_method_call<GetSubTreeType>(
+        ctx->yield, ec, "xyz.openbmc_project.ObjectMapper",
+        "/xyz/openbmc_project/object_mapper",
+        "xyz.openbmc_project.ObjectMapper", "GetSubTree",
+        "/xyz/openbmc_project/inventory", 0, psuIntf);
+    if (ec)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetPSUInventory: Failed to get PSU inventory");
+        return ipmi::responseResponseError();
+    }
+
+    // Validate request PSU number is within PSU inventory paths limit
+    if (psuNumber >= subtree.size())
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetPSUInventory: Requested PSU number not in range");
+        return ipmi::responseInvalidFieldRequest();
+    }
+
+    for (const auto& object : subtree)
+    {
+        // Get the requested PSU number
+        if (!boost::ends_with(object.first, std::to_string(psuNumber)))
+        {
+            continue;
+        }
+        for (const auto& serviceIface : object.second)
+        {
+            std::string serviceName = serviceIface.first;
+            ec.clear();
+            PropertyMapType propMap =
+                ctx->bus->yield_method_call<PropertyMapType>(
+                    ctx->yield, ec, serviceName, object.first,
+                    "org.freedesktop.DBus.Properties", "GetAll", "");
+            if (ec)
+            {
+                phosphor::logging::log<level::ERR>(
+                    "ipmiGetPSUInventory: Failed to get dbus properties");
+                return ipmi::responseResponseError();
+            }
+            std::string* res = nullptr;
+            // Get requested info
+            switch (psuInfo)
+            {
+                case 0 : // Serial Number
+                    res = std::get_if<std::string>(&propMap["SerialNumber"]);
+                    break;
+
+                case 1 : // Part Number
+                    res = std::get_if<std::string>(&propMap["PartNumber"]);
+                    break;
+
+                case 2 : // Manufacturer
+                    res = std::get_if<std::string>(&propMap["Manufacturer"]);
+                    break;
+
+                case 3 : // Revision
+                    res = std::get_if<std::string>(&propMap["Version"]);
+                    break;
+
+                default: // Error
+                    phosphor::logging::log<level::ERR>(
+                        "ipmiGetPSUInventory: Invalid PSU requested info");
+                    return ipmi::responseInvalidFieldRequest();
+                    break;
+            }
+
+            if (res == nullptr)
+            {
+                phosphor::logging::log<level::ERR>(
+                        "ipmiGetPSUInventory: Empty requested dbus property");
+                return ipmi::responseResponseError();
+            }
+
+            return ipmi::responseSuccess(psuInfo, *res);
+        }
+    }
+    return ipmi::responseInvalidFieldRequest();
+}
+
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1622,6 +1740,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdSetFanZonePWMDuty,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetFanZonePWMDuty);
+
+    // <Get PSU Inventory details>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetPSUInventory));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetPSUInventory,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetPSUInventory);
 
     return;
 }
