@@ -1538,6 +1538,55 @@ ipmi::RspType<uint8_t, std::string> ipmiGetPSUInventory(
     return ipmi::responseInvalidFieldRequest();
 }
 
+ipmi::RspType<uint8_t> ipmiGetBiosPostStatus(uint8_t requestData)
+{
+    try
+    {
+        std::ofstream ofs;
+        std::string path;
+        switch (requestData)
+        {
+            case 0: // Post Clear
+                // Do nothing.
+                return ipmi::responseSuccess();
+                break;
+            case 1: // Post Start
+                // Do nothing.
+                return ipmi::responseSuccess();
+                break;
+            case 2: // Post End
+                // Set SPD read by BMC.
+                path = "/sys/class/gpio/gpio800/value";
+                if (!ofs.is_open())
+                {
+                    ofs.open(path);
+                }
+                ofs.clear();
+                ofs.seekp(0);
+                ofs << 0;
+                ofs.close();
+
+                // Workaround:Restart DIMM temperature reading and ipmi host
+                // when getting POST end service
+                system("systemctl restart phosphor-virtual-sensor.service");
+                system("systemctl restart phosphor-ipmi-host.service");
+
+                return ipmi::responseSuccess();
+                break;
+            default:
+                return ipmi::responseResponseError();
+                break;
+        }
+    }
+    catch (std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to Get Bios Post Status",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+}
+
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1723,20 +1772,20 @@ void registerNvOemFunctions()
 
     // <Set All Fan Zones PWM Duty>
     log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemFan),
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdAllFanZonesPWMDuty));
 
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemFan,
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdAllFanZonesPWMDuty,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetAllFanZonesPWMDuty);
 
     // <Set Fan Zone PWM Duty>
     log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemFan),
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetFanZonePWMDuty));
 
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemFan,
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdSetFanZonePWMDuty,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetFanZonePWMDuty);
@@ -1750,6 +1799,15 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetPSUInventory,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetPSUInventory);
+
+    // <Get BIOS POST Status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemPost),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetBiosPostStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
+                          ipmi::nvidia::app::cmdGetBiosPostStatus,
+                          ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostStatus);
 
     return;
 }

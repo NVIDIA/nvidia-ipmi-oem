@@ -12,7 +12,7 @@ namespace nvidia
 {
 constexpr auto netFnOemGlobal = 0x32;
 constexpr auto netFnOemNV = 0x3C;
-constexpr auto netFnOemFan = 0x3C;
+constexpr auto netFnOemPost = 0x30;
 
 namespace app
 {
@@ -31,6 +31,7 @@ constexpr auto cmdGetDNSConfig = 0x6B;
 constexpr auto cmdSetDNSConfig = 0x6C;
 constexpr auto cmdAllFanZonesPWMDuty = 0x74;
 constexpr auto cmdSetFanZonePWMDuty = 0x75;
+constexpr auto cmdGetBiosPostStatus = 0x25;
 
 } // namespace app
 
