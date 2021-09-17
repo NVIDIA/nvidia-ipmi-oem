@@ -1688,6 +1688,48 @@ ipmi::RspType<uint8_t> ipmiGetLedStatus(uint8_t request)
         }
 }
 
+ipmi::RspType<uint8_t> ipmiGetCecBootStatus(uint8_t request)
+{
+    /*
+     * Request data:
+     * Type:
+     *      00h: CEC
+     *      01h: FPGA-CEC
+     */
+
+    /*
+     * Response data:
+     * offset 1: Complete Code
+     * offset 2: Data out [31:24]
+     * offset 3: Data out [23:16]
+     * offset 4: Data out [15:8]
+     * offset 5: Data out [7:0]
+     */
+
+    try
+    {
+        phosphor::smbus::Smbus smbus;
+
+        if(request == 0x00) // CEC status
+        {
+            uint8_t resp = smbus.GetSmbusCmdByte(1, 0xaa,0x45);
+            return ipmi::responseSuccess(resp);
+        }
+        else if (request == 0x01) // CEC-FPGA status
+        {
+            uint8_t resp = smbus.GetSmbusCmdByte(10, 0xaa,0x45);
+            return ipmi::responseSuccess(resp);
+        }
+    }
+    catch (std::exception& e)
+    {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Failed to Get Cec Boot Status",
+                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
+                return ipmi::responseResponseError();
+    }
+}
+
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1919,6 +1961,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdGetLedStatus,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetLedStatus);
+
+     // <Get Cec Boot Status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemDiag),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetCecBootStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemDiag,
+                          ipmi::nvidia::app::cmdGetCecBootStatus,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetCecBootStatus);
 
     return;
 }
