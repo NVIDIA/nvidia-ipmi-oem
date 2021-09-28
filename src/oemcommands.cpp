@@ -5,7 +5,6 @@
  */
 
 #include "oemcommands.hpp"
-#include "smbus.hpp"
 
 #include <ipmid/api.hpp>
 #include <ipmid/api-types.hpp>
@@ -69,12 +68,6 @@ const char* timeIntf = "xyz.openbmc_project.Time.Synchronization";
    std::string networkNTPObj = "/xyz/openbmc_project/network/eth0";
 #endif
 std::string networkNTPIntf = "xyz.openbmc_project.Network.EthernetInterface";
-
-// Led status object in dbus
-const char* power_led_Obj = "/xyz/openbmc_project/led/physical/power_led";
-const char* fault_led_Obj = "/xyz/openbmc_project/led/physical/fault_led";
-const char* mb_dbg_led_Obj = "/xyz/openbmc_project/led/physical/motherboard_debug_led";
-const char* ledIntf = "xyz.openbmc_project.Led.Physical";
 
 // PSU Inventory
 static constexpr const std::array<const char*, 1> psuIntf = {
@@ -1594,100 +1587,6 @@ ipmi::RspType<uint8_t> ipmiGetBiosPostStatus(uint8_t requestData)
     }
 }
 
-ipmi::RspType<uint8_t> ipmiGetLedStatus(uint8_t request)
-{
-
-    /*
-     * Request data:
-     * Type:
-     *      00h: Power LED
-     *      01h: Fault LED
-     *      10h: Motherboard debug LED
-     *      20h: CEC alive LED
-     *      21h: CEC state
-     */
-
-    /*
-     * Response data:
-     * offset 1: Complete Code
-     * offset 2: Value: 00h: Off
-     *                  01h: On
-     */
-
-    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-
-        try
-        {
-            if(request == 0x00) // Power Led
-            {
-                auto service = ipmi::getService(*dbus, ledIntf, power_led_Obj);
-                auto ledMethod = ipmi::getDbusProperty(*dbus, service, power_led_Obj, ledIntf, "State");
-
-                if (std::get<std::string>(ledMethod) ==
-                        "xyz.openbmc_project.Led.Physical.Action.Off")
-                {
-                    return ipmi::responseSuccess(static_cast<uint8_t>(0));
-                }
-                else if (std::get<std::string>(ledMethod) ==
-                        "xyz.openbmc_project.Led.Physical.Action.On")
-                {
-                    return ipmi::responseSuccess(static_cast<uint8_t>(1));
-                }
-            }
-            else if(request == 0x01)// Fault led
-            {
-                auto service = ipmi::getService(*dbus, ledIntf, fault_led_Obj);
-                auto ledMethod = ipmi::getDbusProperty(*dbus, service, fault_led_Obj, ledIntf, "State");
-
-                if (std::get<std::string>(ledMethod) ==
-                        "xyz.openbmc_project.Led.Physical.Action.Off")
-                {
-                    return ipmi::responseSuccess(static_cast<uint8_t>(0));
-                }
-                else if (std::get<std::string>(ledMethod) ==
-                        "xyz.openbmc_project.Led.Physical.Action.On")
-                {
-                    return ipmi::responseSuccess(static_cast<uint8_t>(1));
-                }
-            }
-            else if(request == 0x10)// Motherboard Debug Led
-            {
-                auto service = ipmi::getService(*dbus, ledIntf, mb_dbg_led_Obj);
-                auto ledMethod = ipmi::getDbusProperty(*dbus, service, mb_dbg_led_Obj, ledIntf, "State");
-
-                if (std::get<std::string>(ledMethod) ==
-                        "xyz.openbmc_project.Led.Physical.Action.Off")
-                {
-                    return ipmi::responseSuccess(static_cast<uint8_t>(0));
-                }
-                else if (std::get<std::string>(ledMethod) ==
-                        "xyz.openbmc_project.Led.Physical.Action.On")
-                {
-                return ipmi::responseSuccess(static_cast<uint8_t>(1));
-                }
-            }
-            else if(request == 0x20)// CEC alive Led
-            {
-                return ipmi::responseSuccess();
-            }
-            else if(request == 0x21)// CEC state
-            {
-                return ipmi::responseSuccess();
-            }
-            else
-            {
-                return ipmi::responseResponseError();
-            }
-        }
-        catch (std::exception& e)
-        {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                        "Failed to Get Led Status",
-                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
-                return ipmi::responseResponseError();
-        }
-}
-
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1909,16 +1808,6 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdGetBiosPostStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostStatus);
-
-    // <Get Led Status>
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemDiag),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetLedStatus));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemDiag,
-                          ipmi::nvidia::app::cmdGetLedStatus,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiGetLedStatus);
 
     return;
 }
