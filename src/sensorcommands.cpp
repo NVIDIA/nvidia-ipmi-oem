@@ -67,6 +67,7 @@ SensorSubTree sensorTree;
 SDRObjectType sensorDataRecords;
 
 static boost::container::flat_map<std::string, ManagedObjectType> SensorCache;
+static boost::container::flat_map<std::string, ManagedObjectType> SensorCache2;
 
 // Specify the comparison required to sort and find char* map objects
 struct CmpStr
@@ -254,20 +255,46 @@ static bool getSensorMap(boost::asio::yield_context yield,
         }
 
         SensorCache[sensorConnection] = managedObjects;
-    }
-    auto connection = SensorCache.find(sensorConnection);
-    if (connection == SensorCache.end())
-    {
-        return false;
-    }
-    auto path = connection->second.find(sensorPath);
-    if (path == connection->second.end())
-    {
-        return false;
-    }
-    sensorMap = path->second;
 
-    return true;
+        // Also look for GetManagedObjects in sensor path
+        auto sensorManagedObjects = dbus->yield_method_call<ManagedObjectType>(
+            yield, ec, sensorConnection.c_str(), "/xyz/openbmc_project/sensors",
+            "org.freedesktop.DBus.ObjectManager", "GetManagedObjects");
+        if (ec)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "GetMangagedObjects for getSensorMap failed",
+                phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
+
+            // Will not fail here as its not implemented by all services;
+        }
+
+        SensorCache2[sensorConnection] = sensorManagedObjects;
+    }
+
+    auto connection = SensorCache.find(sensorConnection);
+    if (connection != SensorCache.end())
+    {
+        auto path = connection->second.find(sensorPath);
+        if (path != connection->second.end())
+        {
+            sensorMap = path->second;
+            return true;
+        }
+    }
+
+    auto connection2 = SensorCache2.find(sensorConnection);
+    if (connection2 != SensorCache2.end())
+    {
+        auto path2 = connection2->second.find(sensorPath);
+        if (path2 != connection2->second.end())
+        {
+            sensorMap = path2->second;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /* sensor commands */
