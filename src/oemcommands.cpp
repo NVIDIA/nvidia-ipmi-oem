@@ -6,6 +6,8 @@
 
 #include "oemcommands.hpp"
 
+#include "dgx-a100-config.hpp"
+
 #include <ipmid/api.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/utils.hpp>
@@ -24,6 +26,8 @@
 #include <bits/stdc++.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/process/child.hpp>
+#include <xyz/openbmc_project/Software/Version/server.hpp>
+#include <xyz/openbmc_project/Software/Activation/server.hpp>
 
 // Network object in dbus
 const char* networkService = "xyz.openbmc_project.Network";
@@ -72,6 +76,13 @@ std::string networkNTPIntf = "xyz.openbmc_project.Network.EthernetInterface";
 // PSU Inventory
 static constexpr const std::array<const char*, 1> psuIntf = {
     "xyz.openbmc_project.Inventory.Item.PowerSupply"};
+
+static constexpr auto redundancyIntf =
+    "xyz.openbmc_project.Software.RedundancyPriority";
+static constexpr auto versionIntf = "xyz.openbmc_project.Software.Version";
+static constexpr auto activationIntf =
+    "xyz.openbmc_project.Software.Activation";
+static constexpr auto softwareRoot = "/xyz/openbmc_project/software";
 
 // IPMI OEM Major and Minor version
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
@@ -259,94 +270,60 @@ ipmiBF2ResetControl(uint8_t resetOption)
     return ipmi::response(ipmi::ccSuccess);
 }
 
-ipmi::Cc i2cSMBusWriteRead(int i2cdev, const uint8_t slaveAddr, uint8_t devAddr,
-                           uint8_t read_write, uint8_t* buf)
-{
-    struct i2c_smbus_ioctl_data ioctl_data;
-    union i2c_smbus_data smbus_data;
-    int rc;
-    uint8_t len = buf[0];
+static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData) {
+    std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
 
-    if (len > (I2C_SMBUS_BLOCK_MAX+1))
+    int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
+    if (i2cDev < 0)
     {
-        log<level::ERR>("Invalid length",
-                        phosphor::logging::entry("read_write= %u, len=%u",
-                        read_write, len));
-        return ipmi::ccReqDataLenInvalid;
+        log<level::ERR>("Failed to open i2c bus",
+                        phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
+        return ipmi::ccInvalidFieldRequest;
+    }
+    std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
+
+    auto ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("Failed to perform I2C transaction!");
+    }
+    return ret;
+}
+
+ipmi::Cc psuReadInformation(uint8_t psuNum, uint8_t cmd, std::vector<uint8_t> &buffer) {
+    if (psuNum >= nvidia::psuNumber) {
+        return ipmi::ccParmOutOfRange;
     }
 
-    if ((rc = ::ioctl(i2cdev, I2C_SLAVE, slaveAddr)) < 0)
+    std::vector<uint8_t> wr = {cmd};
+    auto retI2C = i2cTransaction(nvidia::psuBus[psuNum], nvidia::psuAddr[psuNum], wr, buffer);
+    if (retI2C != ipmi::ccSuccess)
     {
-        log<level::ERR>("Failed to acquire bus access",
-                        phosphor::logging::entry("read_write=%u, len=%u, slaveAddr=0x%x, rc=%d",
-                        read_write, len, slaveAddr, rc));
-        return ipmi::ccDestinationUnavailable;
+        log<level::ERR>("Failed doing i2c SMBus Read of psu_info",
+                        phosphor::logging::entry("BUS=%d, slaveAddress=0x%x, cmd=0x%x, len=%u",
+                        nvidia::psuBus[psuNum], nvidia::psuAddr[psuNum], cmd, buffer.size()));
     }
 
-    smbus_data.block[0] = len;
-
-    if (read_write != I2C_SMBUS_READ)
-    {
-        for(int i = 1; i < (len+1); i++)
-        {
-            smbus_data.block[i] = buf[i];
-        }
-    }
-
-    ioctl_data.read_write = read_write;
-    ioctl_data.command = devAddr;
-    ioctl_data.size = I2C_SMBUS_I2C_BLOCK_DATA;
-    ioctl_data.data = &smbus_data;
-
-    rc = ::ioctl(i2cdev, I2C_SMBUS, &ioctl_data);
-    if (rc < 0)
-    {
-        log<level::ERR>("Failed to access I2C_SMBUS Read/Write",
-                        phosphor::logging::entry("read_write=%u, len=%u, slaveAddr=0x%x, devAddr=0x%x, rc=%d",
-                        read_write, len, slaveAddr, devAddr, rc));
-        return ipmi::ccDestinationUnavailable;
-    }
-
-    if (read_write == I2C_SMBUS_READ)
-    {
-        buf[0] = smbus_data.block[0];
-        for(int i = 1; i < (len+1); i++)
-        {
-            // Skip the first byte, which is the length of the rest of the block.
-            buf[i] = smbus_data.block[i];
-        }
-    }
-
-    return ipmi::ccSuccess;
+    return retI2C;
 }
 
 ipmi::RspType<uint8_t, std::vector<uint8_t>>
 ipmiPSUInventoryInfo(uint8_t psuNum, uint8_t psuInfoSelector)
 {
 
-    std::array<uint8_t, 4> psuCmd = {0x9E, 0x9A, 0x99, 0x9B};
-    std::array<uint8_t, 4> psuInfoLen = {0x0D, 0x0C, 0x06, 0x06};
-    std::array<uint8_t, 3> slaveAddress = {0x40, 0x41, 0x42};
-    std::vector<uint8_t> dataReceived;
-    int size = I2C_SMBUS_I2C_BLOCK_DATA;
-    uint8_t bus = 3;
+    std::array<uint8_t, 4> psuCmd = {nvidia::psuRegSerialNumber,
+                                        nvidia::psuRegPartNumber,
+                                        nvidia::psuRegVendor,
+                                        nvidia::psuRegModel};
+    std::array<uint8_t, 4> psuInfoLen = {nvidia::psuRegSerialNumberLen,
+                                        nvidia::psuRegPartNumberLen,
+                                        nvidia::psuRegVendorLen,
+                                        nvidia::psuRegModelLen};
 
-    if (psuNum > 5)
+    if (psuNum >= nvidia::psuNumber)
     {
         log<level::ERR>("Invalid psuNum",
                         phosphor::logging::entry("psuNum=%u", psuNum));
         return ipmi::responseInvalidFieldRequest();
-    }
-    else
-    {
-        if (psuNum < 3)
-        {
-            bus = 4;
-        }
-        else
-        {
-            bus = 3;
-        }
     }
 
     // psuInfoSelector
@@ -362,58 +339,15 @@ ipmiPSUInventoryInfo(uint8_t psuNum, uint8_t psuInfoSelector)
         return ipmi::responseInvalidFieldRequest();
     }
 
-    std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
-
-    // Open the i2c device, for low-level combined data write/read
-    int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
-    if (i2cDev < 0)
-    {
-        log<level::ERR>("Failed to open i2c bus",
-                        phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
-        return ipmi::responseInvalidFieldRequest();
-    }
-
-    // psuNum range is 0 to 5.  Under each mux channel number is 0 to 2
-    // Select mux channel first: i2cMux@0x70 device_address@0x04
-    // chanel_number is bit 0 and 1 ith bit 2 as enable bit in data_byte=000001xx
-    uint8_t muxData[2] = {0};
-    muxData[0] = 1;
-    muxData[1] = (0x04 | (psuNum % 3));
-    auto retI2C = i2cSMBusWriteRead(i2cDev, 0x70, 0x04, I2C_SMBUS_WRITE,
-                                    muxData);
-    if (retI2C != ipmi::ccSuccess)
-    {
-        log<level::ERR>("Failed doing i2c SMBus Write to set channel to the MUX",
-                        phosphor::logging::entry("BUS=%s, muxData[0]=0x%x",
-                        i2cBus.c_str(), muxData[0]));
-        ::close(i2cDev);
-        return ipmi::response(retI2C);
-    }
-
-    uint8_t psuInfoBuf[I2C_SMBUS_BLOCK_MAX+1] = {0};
-    psuInfoBuf[0] = psuInfoLen[psuInfoSelector];
-    retI2C = i2cSMBusWriteRead(i2cDev, slaveAddress[(psuNum % 3)],
-                               psuCmd[psuInfoSelector], I2C_SMBUS_READ,
-                               psuInfoBuf);
-    ::close(i2cDev);
+    std::vector<uint8_t> psuInfoBuf(psuInfoLen[psuInfoSelector]);
+    auto retI2C = psuReadInformation(psuNum, psuCmd[psuInfoSelector], psuInfoBuf);
 
     if (retI2C != ipmi::ccSuccess)
     {
-        log<level::ERR>("Failed doing i2c SMBus Read of psu_info",
-                        phosphor::logging::entry("BUS=%s, slaveAddress[%u]=0x%x, psuCmd[%u]=0x%x, psuInfoLen[%u]=%u",
-                        i2cBus.c_str(), (psuNum % 3),
-                        slaveAddress[(psuNum % 3)], psuInfoSelector,
-                        psuCmd[psuInfoSelector], psuInfoSelector,
-                        psuInfoLen[psuInfoSelector]));
         return ipmi::response(retI2C);
     }
 
-    for (int i = 1; i < (psuInfoBuf[0] + 1); i++)
-    {
-        dataReceived.emplace_back(psuInfoBuf[i]);
-    }
-
-    return ipmi::responseSuccess(psuInfoSelector, dataReceived);
+    return ipmi::responseSuccess(psuInfoSelector, psuInfoBuf);
 }
 
 ipmi::RspType<std::vector<std::string>> ipmiGetDNSConfig()
@@ -1025,27 +959,9 @@ ipmi::RspType<uint8_t> ipmiGetFwBootupSlot(uint8_t FwType)
     {
         case 0x00: // BMC
         {
-            // TODO: Enable i2cWriteRead on actual hardware
-            /*
-            std::string i2cBus = "/dev/i2c-1";
-            // Open the i2c device, for low-level combined data write/read
-            int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
-            if (i2cDev < 0)
-            {
-                log<level::ERR>("Failed to open i2c bus",
-                    phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
-                return ipmi::responseInvalidFieldRequest();
-            }
-            uint7_t slaveAddr = 0x55;
-            std::vector<uint8_t> writeData={0x00, 0x9B};
-            static const constexpr size_t bufLen = 7;
-            std::vector<uint8_t> readBuf(bufLen);
-
-            ipmi::Cc ret = ipmi::i2cWriteRead(i2cBus,
-                static_cast<uint8_t>(slaveAddr), writeData, readBuf);
-
-            ::close(i2cDev);
-
+            std::vector<uint8_t> writeData={0x00, nvidia::cecI2cFwSlotReg};
+            std::vector<uint8_t> readBuf(7);
+            ipmi::Cc ret =  i2cTransaction(nvidia::cecI2cBus, nvidia::cecI2cAddress, writeData, readBuf);
             if (ret != ipmi::ccSuccess)
             {
                 return ipmi::response(ret);
@@ -1070,8 +986,6 @@ ipmi::RspType<uint8_t> ipmiGetFwBootupSlot(uint8_t FwType)
             {
                 return ipmi::responseResponseError();
             }
-            */
-            return ipmi::responseSuccess(static_cast<uint8_t>(0));
         }
         break;
 
@@ -1587,6 +1501,354 @@ ipmi::RspType<uint8_t> ipmiGetBiosPostStatus(uint8_t requestData)
     }
 }
 
+ipmi::RspType<> ipmiOemSoftReboot()
+{
+    /* TODO: Should be handled by dbus call once backend exists */
+    /* call powerctrl grace_off to trigger soft off */
+    system("powerctrl grace_off");
+    /* call powerctrl for power cycle, this will force off if the grace off didn't occur */
+    system("powerctrl power_cycle");
+    return ipmi::responseSuccess();
+}
+
+static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscGetFPGAVersion(uint8_t bus, uint8_t reg) {
+    using namespace ipmi::nvidia::misc;
+
+    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> readBuf(2);
+
+    auto ret = i2cTransaction(bus, ipmi::nvidia::fpgaI2cAddress, writeData, readBuf);
+
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("FPGA Version read failed",
+            phosphor::logging::entry("BUS=%d", bus));
+        return ipmi::responseResponseError();
+    }
+
+    return ipmi::responseSuccess(0x00, readBuf);
+}
+
+static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscGetPEXSwVersion(uint8_t bus, uint8_t devid) {
+    using namespace ipmi::nvidia::misc;
+
+    std::vector<uint8_t> writeData(std::begin(ipmi::nvidia::pexSwitchVersionWrite), std::end(ipmi::nvidia::pexSwitchVersionWrite));
+    std::vector<uint8_t> readBuf(4);
+
+    auto ret = i2cTransaction(bus, devid, writeData, readBuf);
+
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("PEX SW Version read failed",
+            phosphor::logging::entry("BUS=%d", bus));
+        return ipmi::responseResponseError();
+    }
+
+    std::vector<uint8_t> version = {static_cast<uint8_t>(((readBuf[2] >> 4) & 0x0f)),
+        static_cast<uint8_t>(readBuf[2] & 0x0f)};
+    return ipmi::responseSuccess(0x01, version);
+}
+
+static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscCECCommand(uint8_t bus, uint8_t reg) {
+    using namespace ipmi::nvidia::misc;
+
+    std::vector<uint8_t> writeData={0x00, reg};
+    std::vector<uint8_t> readBuf(2);
+    auto ret = i2cTransaction(bus, ipmi::nvidia::cecI2cAddress, writeData, readBuf);
+
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("CEC version read failed",
+            phosphor::logging::entry("BUS=%d", bus));
+        return ipmi::responseResponseError();
+    }
+
+    return ipmi::responseSuccess(0x00, readBuf);
+}
+
+static uint8_t hexAsciiToInt(uint8_t c) {
+    switch (c) {
+        case '0' ... '9':
+            return c - '0';
+        case 'A' ... 'F':
+            return c - 'A';
+        case 'a' ... 'f':
+            return c -'a';
+    }
+    return 0;
+}
+
+static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMisGetPsuFWVersion(uint8_t psuNum) {
+    /* get vendor information */
+    std::vector<uint8_t> psuVendorInfo(6);
+    auto ret = psuReadInformation(psuNum, ipmi::nvidia::psuRegVendor, psuVendorInfo);
+    if (ret != ipmi::ccSuccess) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to get PSU vendor information");
+        return ipmi::responseResponseError();
+    }
+    psuVendorInfo.erase(psuVendorInfo.begin());
+    /* delta PSU handles FW version in binary */
+    if (boost::starts_with(psuVendorInfo, "Delt")) {
+        std::vector<uint8_t> fwv(7);
+        ret = psuReadInformation(psuNum, ipmi::nvidia::psuRegFWVersion, fwv);
+        if ((ret != ipmi::ccSuccess)||((fwv[1] == 0)&&(fwv[2]==0)&&(fwv[3]==0)&&
+                                    (fwv[4] == 0)&&(fwv[5]==0)&&(fwv[6]==0))) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to get PSU firmware version");
+            return ipmi::responseResponseError();
+        }
+        /* flip byte ordering */
+        fwv.erase(fwv.begin());
+        for (int i = 0; i < sizeof(fwv); i += 2) {
+            uint8_t t = fwv[i];
+            fwv[i] = fwv[i + 1];
+            fwv[i + 1] = t;
+        }
+        return ipmi::responseSuccess(0x00, fwv);
+    }
+    /* LiteOn PSU handles FW version in ascii */
+    else if (boost::starts_with(psuVendorInfo, "Lite")) {
+        std::vector<uint8_t> fwv(5);
+        ret = psuReadInformation(psuNum, ipmi::nvidia::psuRegFWVersion, fwv);
+        if ((ret != ipmi::ccSuccess)||((fwv[1] == 0)&&(fwv[2]==0)&&(fwv[3]==0)&&
+                                    (fwv[4] == 0))) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to get PSU firmware version");
+            return ipmi::responseResponseError();
+        }
+        fwv.erase(fwv.begin());
+        /* ascii to binary conversion */
+        for (int i = 0; i < sizeof(fwv); i++) {
+            fwv[i] = hexAsciiToInt(fwv[i]);
+        }
+        return ipmi::responseSuccess(0x00, fwv);
+    }
+    else {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "PSU Vendor unrecognized");
+            return ipmi::responseResponseError();
+    }
+}
+
+static std::tuple <int, std::vector<uint8_t>> smbpbiRequestFPGA(uint8_t op, uint8_t arg1, uint8_t arg2 = 0) {
+        // Call smpbi passthrough call
+    int rc;
+    std::vector<uint32_t> dataOut;
+    std::tuple <int, std::vector<uint32_t>> smbpbiRes;
+    std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
+    std::string service = ipmi::getService(*bus, gpuSMBPBIIntf, gpuSMBPBIPath);
+    auto method = bus->new_method_call(service.c_str(), gpuSMBPBIPath,
+                                       gpuSMBPBIIntf, "PassthroughFpga");
+    std::vector<uint32_t> dataIn;
+    // Add GPU device Id
+    method.append(static_cast<int>(ipmi::nvidia::gpFpgaSmbpbiDeviceId));
+    // Add SMPBI opcode
+    method.append(op);
+    // Add ARG1
+    method.append(arg1);
+    // Add ARG2
+    method.append(arg2);
+    // Add dataIn
+    method.append(dataIn);
+    // Call passthrough dbus method
+    auto reply = bus->call(method);
+    if (reply.is_method_error())
+    {
+        phosphor::logging::log<level::ERR>(
+            "smbpbi request: Passthrough method returned error",
+            phosphor::logging::entry("SERVICE=%s", service.c_str()),
+            phosphor::logging::entry("PATH=%s", gpuSMBPBIPath));
+        return std::tuple <int, std::vector<uint8_t>>(-1, {});
+    }
+
+    reply.read(smbpbiRes);
+    std::tie (rc, dataOut) = smbpbiRes;
+    std::vector<uint8_t> returnData(dataOut.size() * sizeof(uint32_t));
+    for (int i = 0; i < dataOut.size(); i++) {
+        returnData[i * 4 + 0] = dataOut[i] & 0xff;
+        returnData[i * 4 + 1] = (dataOut[i] >> 8) & 0xff;
+        returnData[i * 4 + 2] = (dataOut[i] >> 16) & 0xff;
+        returnData[i * 4 + 3] = (dataOut[i] >> 24) & 0xff;
+    }
+    return std::tuple <int, std::vector<uint8_t>>(rc, returnData);
+}
+
+static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemGetFirmwareVersionGBFpga(void) {
+    int rc;
+    std::vector<uint8_t> dataOut;
+
+    // Call passthrough dbus method
+    try {
+        std::tuple <int, std::vector<uint8_t>> smbpbiRes =
+                smbpbiRequestFPGA(nvidia::gbFpgaSmbpbiVersionOpcode, nvidia::gbFpgaSmbpbiVersionArg1);
+        std::tie (rc, dataOut) = smbpbiRes;
+
+        if ((rc == 0)&&(dataOut.size() == 16)) {
+            dataOut[0] = hexAsciiToInt(dataOut[8]);
+            dataOut[1] = (hexAsciiToInt(dataOut[10]) << 4) + hexAsciiToInt(dataOut[11]);
+            dataOut.resize(2);
+            return ipmi::responseSuccess(0x00, dataOut);
+        }
+        else {
+            log<level::ERR>("Unexpected response from SMPBI");
+        }
+    }
+    catch (sdbusplus::exception_t& e)
+    {
+        log<level::ERR>("Failed to query GPFPGA FW Version",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+    return ipmi::responseUnspecifiedError();
+}
+
+ipmi::RspType<uint8_t, std::vector<uint8_t>> getBMCActiveSoftwareVersionInfo(ipmi::Context::ptr ctx)
+{
+    std::string revision{};
+    ipmi::ObjectTree objectTree;
+    try
+    {
+        objectTree =
+            ipmi::getAllDbusObjects(*ctx->bus, softwareRoot, redundancyIntf);
+    }
+    catch (const sdbusplus::exception::exception& e)
+    {
+        log<level::ERR>("Failed to fetch redundancy object from dbus",
+                        entry("INTERFACE=%s", redundancyIntf),
+                        entry("ERRMSG=%s", e.what()));
+    }
+
+    auto objectFound = false;
+    for (auto& softObject : objectTree)
+    {
+        auto service =
+            ipmi::getService(*ctx->bus, redundancyIntf, softObject.first);
+        auto objValueTree =
+            ipmi::getManagedObjects(*ctx->bus, service, softwareRoot);
+
+        auto minPriority = 0xFF;
+        for (const auto& objIter : objValueTree)
+        {
+            try
+            {
+                auto& intfMap = objIter.second;
+                auto& redundancyPriorityProps = intfMap.at(redundancyIntf);
+                auto& versionProps = intfMap.at(versionIntf);
+                auto& activationProps = intfMap.at(activationIntf);
+                auto priority =
+                    std::get<uint8_t>(redundancyPriorityProps.at("Priority"));
+                auto purpose =
+                    std::get<std::string>(versionProps.at("Purpose"));
+                auto activation =
+                    std::get<std::string>(activationProps.at("Activation"));
+                auto version =
+                    std::get<std::string>(versionProps.at("Version"));
+                if ((sdbusplus::xyz::openbmc_project::Software::server::Version::convertVersionPurposeFromString(purpose) ==
+                     sdbusplus::xyz::openbmc_project::Software::server::Version::VersionPurpose::BMC)&&
+                     (sdbusplus::xyz::openbmc_project::Software::server::Activation::convertActivationsFromString(activation) ==
+                     sdbusplus::xyz::openbmc_project::Software::server::Activation::Activations::Active))
+                {
+                    if (priority < minPriority)
+                    {
+                        minPriority = priority;
+                        objectFound = true;
+                        revision = std::move(version);
+                    }
+                }
+            }
+            catch (const std::exception& e)
+            {
+                log<level::ERR>(e.what());
+            }
+        }
+    }
+
+    if (!objectFound)
+    {
+        log<level::ERR>("Could not found an BMC software Object");
+        return ipmi::responseResponseError();
+    }
+
+    /* format looks like: 2.9.1-415-g12badb987.1633991995.39335 */
+    std::vector<std::string> parts;
+    auto location = revision.find_first_of('v');
+    if (location != std::string::npos) {
+        revision = revision.substr(location + 1);
+    }
+
+    boost:split(parts, revision, boost::is_any_of(".-"));
+
+    if (parts.size() < 3) {
+        return ipmi::responseResponseError();
+    }
+
+    /* pack into bytes */
+    std::vector<uint8_t> ret(6);
+    /* first 3 parts are convertable to bytes, if 4th part exists we tag it */
+    uint8_t maj = std::stoi(parts[0]); /* major rev */
+    uint8_t min = std::stoi(parts[1]); /* minor rev, need to convert to bcd */
+    uint16_t d0 = std::stoi(parts[2]); /* extra part 1 */
+    uint8_t d1 = 0;
+    if (parts.size() > 3) {
+        d1 = 1;
+    }
+
+    ret[0] = maj & ~(1 << 7); /* mask MSB off */
+    min = (min > 99 ? 99 : min);
+    ret[1] = min % 10 + (min / 10) * 16;
+    ret[2] = d0 & 0xff;
+    ret[3] = (d0 >> 8) & 0xff;
+    ret[4] = d1; /* can only be 0 or 1 */
+    ret[5] = 0;
+
+    return ipmi::responseSuccess(2, ret);;
+}
+
+
+ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscFirmwareVersion(ipmi::Context::ptr ctx, uint8_t device)
+{
+    using namespace ipmi::nvidia::misc;
+    switch (device) {
+        /* FPGA I2C request */
+        case getFirmwareVersionDeviceMBFPGA:
+            return ipmiOemMiscGetFPGAVersion(ipmi::nvidia::fpgaMbI2cBus,
+                    ipmi::nvidia::fpgaMbVersionAddr);
+        case getFirmwareVersionDeviceMIDFPGA:
+            return ipmiOemMiscGetFPGAVersion(ipmi::nvidia::fpgaMidI2cBus,
+                    ipmi::nvidia::fpgaMidVersionAddr);
+        /* smbpbi request op_Code 0x05 arg 0x88. ID = 9*/
+        case getFirmwareVersionDeviceGBFPGA:
+            return ipmiOemGetFirmwareVersionGBFpga();
+        break;
+        /* PSU require vendor switching */
+        case getFirmwareVersionDevicePSU0...getFirmwareVersionDevicePSU5:
+            return ipmiOemMisGetPsuFWVersion(device - getFirmwareVersionDevicePSU0);
+        break;
+        /* PEX I2C req */
+        case getFirmwareVersionDevicePEXSwitch0...getFirmwareVersionDevicePEXSwitch3:
+            return ipmiOemMiscGetPEXSwVersion(ipmi::nvidia::pexSwitchI2CBus[device - getFirmwareVersionDevicePEXSwitch0],
+                    ipmi::nvidia::pexSwitchI2CVersionAddress[device - getFirmwareVersionDevicePEXSwitch0]);
+
+        /* CEC Req */
+        case getFirmwareVersionDeviceCEC:
+            return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBus,
+                    ipmi::nvidia::cecI2cVersionRegister);
+        /* FPGA CEC */
+        case getFirmwareVersionDeviceFPGACEC:
+            return ipmiOemMiscCECCommand(ipmi::nvidia::cecFpgaI2cBus,
+                    ipmi::nvidia::cecFpgaI2cVersionRegister);
+
+        /* BMC FW version requests */
+        case getFirmwareVersionDeviceBMCActive:
+            return getBMCActiveSoftwareVersionInfo(ctx);
+        case getFirmwareVersionDeviceBMCInactive:
+            /* Inactive FW version not tracked in openBMC currently TODO: Fix */
+            break;
+        default:
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Unknown firmware device version requested");
+    }
+    return ipmi::responseResponseError();
+}
+
 } // namespace ipmi
 void registerNvOemFunctions()
 {
@@ -1809,5 +2071,22 @@ void registerNvOemFunctions()
                           ipmi::nvidia::app::cmdGetBiosPostStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostStatus);
 
+    // <Soft Reboot>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSoftPowerCycle));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSoftPowerCycle,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemSoftReboot);
+
+    // <Get device firmware version>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetDeviceFirmwareVersion));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetDeviceFirmwareVersion,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemMiscFirmwareVersion);
     return;
 }

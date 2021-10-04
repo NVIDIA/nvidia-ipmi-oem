@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace ipmi
 {
 namespace nvidia
@@ -39,10 +41,30 @@ namespace misc
 {
 constexpr auto cmdGetOEMVersion = 0x01;
 constexpr auto cmdGetFwBootupSlot = 0x03;
+constexpr auto cmdSoftPowerCycle = 0x04;
 constexpr auto cmdGetBMCBootComplete = 0x05;
 constexpr auto cmdSMBPBIPassthrough = 0x09;
 constexpr auto cmdSMBPBIPassthroughExtended = 0x0A;
 constexpr auto cmdGetPSUInventory = 0x0E;
+constexpr auto cmdGetDeviceFirmwareVersion = 0x0F;
+
+constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
+constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;
+constexpr auto getFirmwareVersionDevicePSU0 = 0x02;
+constexpr auto getFirmwareVersionDevicePSU1 = 0x03;
+constexpr auto getFirmwareVersionDevicePSU2 = 0x04;
+constexpr auto getFirmwareVersionDevicePSU3 = 0x05;
+constexpr auto getFirmwareVersionDevicePSU4 = 0x06;
+constexpr auto getFirmwareVersionDevicePSU5 = 0x07;
+constexpr auto getFirmwareVersionDeviceMIDFPGA = 0x08;
+constexpr auto getFirmwareVersionDeviceCEC = 0x09;
+constexpr auto getFirmwareVersionDeviceFPGACEC = 0x0A;
+constexpr auto getFirmwareVersionDevicePEXSwitch0 = 0x10;
+constexpr auto getFirmwareVersionDevicePEXSwitch1 = 0x11;
+constexpr auto getFirmwareVersionDevicePEXSwitch2 = 0x12;
+constexpr auto getFirmwareVersionDevicePEXSwitch3 = 0x13;
+constexpr auto getFirmwareVersionDeviceBMCActive = 0x20;
+constexpr auto getFirmwareVersionDeviceBMCInactive = 0x21;
 
 } // namespace misc
 
