@@ -184,6 +184,14 @@ static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
         {
             min = std::visit(VariantToDoubleVisitor(), minMap->second);
         }
+        // maximum possible range is 511(10-bit max) mulitplier * 255(80bit max) raw value
+        // adjust max value to fit in the range
+        auto range = max - min;
+        auto maxRange = maxInt10 * 255;
+        if (range > maxRange)
+        {
+            max = maxRange + min;
+        }
     }
     if (critical != sensorMap.end())
     {
@@ -1198,6 +1206,15 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         if (minObject != sensorObject->second.end())
         {
             min = std::visit(VariantToDoubleVisitor(), minObject->second);
+        }
+
+        // maximum possible range is 511(10-bit max) mulitplier * 255(80bit max) raw value
+        // adjust max value to fit in the range
+        auto range = max - min;
+        auto maxRange = maxInt10 * 255;
+        if (range > maxRange)
+        {
+            max = maxRange + min;
         }
 
         int16_t mValue = 0;
