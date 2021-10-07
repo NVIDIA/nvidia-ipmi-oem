@@ -92,6 +92,7 @@ static sdbusplus::bus::match::match sensorAdded(
     "sensors/'",
     [](sdbusplus::message::message& m) {
         sensorTree.clear();
+        sensorDataRecords.clear();
         sdrLastAdd = std::chrono::duration_cast<std::chrono::seconds>(
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
@@ -103,6 +104,7 @@ static sdbusplus::bus::match::match sensorRemoved(
     "sensors/'",
     [](sdbusplus::message::message& m) {
         sensorTree.clear();
+        sensorDataRecords.clear();
         sdrLastRemove = std::chrono::duration_cast<std::chrono::seconds>(
                             std::chrono::system_clock::now().time_since_epoch())
                             .count();
