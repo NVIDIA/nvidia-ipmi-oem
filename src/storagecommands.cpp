@@ -86,6 +86,9 @@ int get()
 
 namespace ipmi
 {
+using SDRObjectType =
+    boost::container::flat_map<uint16_t, std::vector<uint8_t>>;
+extern SDRObjectType sensorDataRecords;
 
 namespace storage
 {
@@ -332,6 +335,8 @@ void startMatch(void)
                                 writeFruIfRunning();
                                 frus[path] = object;
                                 recalculateHashes();
+                                // Invalidate SDRs
+                                sensorDataRecords.clear();
                                 lastDevId = 0xFF;
                             });
 
@@ -358,6 +363,8 @@ void startMatch(void)
                                 writeFruIfRunning();
                                 frus.erase(path);
                                 recalculateHashes();
+                                // Invalidate SDRs
+                                sensorDataRecords.clear();
                                 lastDevId = 0xFF;
                             });
 
