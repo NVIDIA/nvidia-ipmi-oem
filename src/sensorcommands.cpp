@@ -182,29 +182,26 @@ static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
         {
             max = std::visit(VariantToDoubleVisitor(), maxMap->second);
         }
-        if (minMap != sensorObject->second.end())
+        if ((minMap != sensorObject->second.end()) && (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), minMap->second))))
         {
             min = std::visit(VariantToDoubleVisitor(), minMap->second);
-        }
-        // maximum possible range is 511(10-bit max) mulitplier * 255(80bit max) raw value
-        // adjust max value to fit in the range
-        auto range = max - min;
-        auto maxRange = maxInt10 * 255;
-        if (range > maxRange)
-        {
-            max = maxRange + min;
         }
     }
     if (critical != sensorMap.end())
     {
         auto lower = critical->second.find("CriticalLow");
         auto upper = critical->second.find("CriticalHigh");
-        if (lower != critical->second.end())
+        if ((lower != critical->second.end()) &&
+            (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), lower->second))))
         {
             double value = std::visit(VariantToDoubleVisitor(), lower->second);
             min = std::min(value, min);
         }
-        if (upper != critical->second.end())
+        if ((upper != critical->second.end()) &&
+            (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), upper->second))))
         {
             double value = std::visit(VariantToDoubleVisitor(), upper->second);
             max = std::max(value, max);
@@ -215,16 +212,29 @@ static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
 
         auto lower = warning->second.find("WarningLow");
         auto upper = warning->second.find("WarningHigh");
-        if (lower != warning->second.end())
+        if ((lower != warning->second.end()) &&
+            (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), lower->second))))
         {
             double value = std::visit(VariantToDoubleVisitor(), lower->second);
             min = std::min(value, min);
         }
-        if (upper != warning->second.end())
+        if ((upper != warning->second.end()) &&
+            (std::isfinite(
+                std::visit(VariantToDoubleVisitor(), upper->second))))
         {
             double value = std::visit(VariantToDoubleVisitor(), upper->second);
             max = std::max(value, max);
         }
+    }
+    // maximum possible range is 511(10-bit max) mulitplier * 255(80bit max) raw
+    // value
+    // adjust max value to fit in the range
+    auto range = max - min;
+    auto maxRange = maxInt10 * 255;
+    if (range > maxRange)
+    {
+        max = maxRange + min;
     }
 }
 
@@ -1191,33 +1201,9 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         record.body.entity_id = entityId;
         record.body.entity_instance = entityInstance;
 
-        auto maxObject = sensorObject->second.find("MaxValue");
-        auto minObject = sensorObject->second.find("MinValue");
-
-        // If min and/or max are left unpopulated,
-        // then default to what a signed byte would be, namely (-128,127) range.
-        auto max = static_cast<double>(std::numeric_limits<int8_t>::max());
-        auto min = static_cast<double>(std::numeric_limits<int8_t>::lowest());
-        if ((maxObject != sensorObject->second.end())
-            && (std::isfinite(
-                std::visit(VariantToDoubleVisitor(), maxObject->second))))
-        {
-            max = std::visit(VariantToDoubleVisitor(), maxObject->second);
-        }
-
-        if (minObject != sensorObject->second.end())
-        {
-            min = std::visit(VariantToDoubleVisitor(), minObject->second);
-        }
-
-        // maximum possible range is 511(10-bit max) mulitplier * 255(80bit max) raw value
-        // adjust max value to fit in the range
-        auto range = max - min;
-        auto maxRange = maxInt10 * 255;
-        if (range > maxRange)
-        {
-            max = maxRange + min;
-        }
+        double max = 0;
+        double min = 0;
+        getSensorMaxMin(sensorMap, max, min);
 
         int16_t mValue = 0;
         int8_t rExp = 0;
