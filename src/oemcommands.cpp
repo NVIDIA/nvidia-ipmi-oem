@@ -18,6 +18,7 @@
 #include <vector>
 #include <array>
 #include <tuple>
+#include <filesystem>
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
@@ -1849,7 +1850,289 @@ ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscFirmwareVersion(ipmi::Co
     return ipmi::responseResponseError();
 }
 
+static ipmi::RspType<uint8_t> getWpStatusFromMidFPGA(uint8_t bitOffset, uint8_t reg, uint8_t devid) {
+    using namespace ipmi::nvidia::misc;
+
+    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> readBuf(1);
+    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, devid, writeData, readBuf);
+
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("WP Status I2C transaction failed");
+        return ipmi::responseResponseError();
+    }
+
+    uint8_t wp = (readBuf[0] & (1 << bitOffset)) >> bitOffset;
+    return ipmi::responseSuccess(wp);
+}
+
+static ipmi::RspType<> setWpStatusFromMidFPGA(uint8_t bitOffset, uint8_t reg,
+                                                uint8_t devid, uint8_t newValue) {
+    using namespace ipmi::nvidia::misc;
+
+    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> readBuf(1);
+    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, devid, writeData, readBuf);
+
+    if (ret != ipmi::ccSuccess) {
+        uint8_t newRegValue = (readBuf[0] & (~(1 << bitOffset)));
+        if (newValue) {
+            newRegValue |= (1 << bitOffset);
+        }
+        writeData.push_back(newRegValue);
+        readBuf.resize(0);
+        ret = i2cTransaction(nvidia::fpgaMidI2cBus, devid, writeData, readBuf);
+    }
+
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("WP Status I2C transaction failed");
+        return ipmi::responseResponseError();
+    }
+
+    return ipmi::responseSuccess();
+}
+
+static ipmi::RspType<uint8_t> getWpStatusGB(void) {
+    int rc;
+    std::vector<uint8_t> dataOut;
+
+    // Call passthrough dbus method
+    try {
+        std::tuple <int, std::vector<uint8_t>> smbpbiRes =
+                        smbpbiRequestFPGA(nvidia::gbFpgaSmbpbiWpOpcode, nvidia::gbFpgaSmbpbiWpReadArg1);
+        std::tie (rc, dataOut) = smbpbiRes;
+        if (dataOut.size() > 0) {
+            return ipmi::responseSuccess(dataOut[1] & nvidia::gbFpgaSmbpbiWpMask ? 1 : 0);
+        }
+        else {
+            log<level::ERR>("Unexpected response from SMBPBI");
+        }
+    }
+    catch (sdbusplus::exception_t& e)
+    {
+        log<level::ERR>("Failed to query GPFPGA WP Status",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+    return ipmi::responseUnspecifiedError();
+}
+
+static ipmi::RspType<> setWpStatusGB(uint8_t newStatus) {
+    int rc;
+    std::vector<uint8_t> dataOut;
+
+    // Call passthrough dbus method
+    try {
+        std::tuple <int, std::vector<uint8_t>> smbpbiRes =
+                        smbpbiRequestFPGA(nvidia::gbFpgaSmbpbiWpOpcode,
+                        nvidia::gbFpgaSmbpbiWpWriteArg1, newStatus);
+        std::tie (rc, dataOut) = smbpbiRes;
+        if (dataOut.size() > 0) {
+            return ipmi::responseSuccess();
+        }
+        else {
+            log<level::ERR>("Unexpected response from SMBPBI");
+        }
+    }
+    catch (sdbusplus::exception_t& e)
+    {
+        log<level::ERR>("Failed to set GPFPGA WP Status",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+    return ipmi::responseUnspecifiedError();
+}
+
+static int gpioExport(std::string gpiochip, uint32_t gpio) {
+    /* will export the gpio if it doesn't exist,
+        need to use the sysfs interface since the char
+        device interface resets once closed, we want
+        persistance here */
+    int base;
+    std::ifstream chipbase("/sys/class/gpio/" + gpiochip + "/base", std::ifstream::in);
+    if (!chipbase.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpiochip base!");
+        return -1;
+    }
+
+    chipbase >> base;
+    chipbase.close();
+
+    gpio += base;
+
+    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio))) {
+        std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
+        if (!exportOf.is_open()) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio export!");
+            return -2;
+        }
+        exportOf << gpio;
+        exportOf.close();
+    }
+    return gpio;
+}
+
+static ipmi::RspType<uint8_t> getGpioCmd(std::string gpiochip, uint32_t gpio)
+{
+    int gp = gpioExport(gpiochip, gpio);
+    if (gp < 0) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to export gpio!");
+        return ipmi::responseUnspecifiedError();
+    }
+    std::ifstream valueIf("/sys/class/gpio/gpio" + std::to_string(gp) + "/value", std::ifstream::in);
+    if (!valueIf.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio value!");
+        return ipmi::responseUnspecifiedError();
+    }
+    int r;
+    valueIf >> r;
+
+    return ipmi::responseSuccess(r);
+}
+
+static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio, uint32_t value)
+{
+    /* note, in order to not glitch the IO we note that it is high when GPIO
+        is set as input. To set this high set GPIO to input mode, to set low
+        set to output and value to 0 */
+    int gp = gpioExport(gpiochip, gpio);
+    if (gp < 0) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to export gpio!");
+        return ipmi::responseUnspecifiedError();
+    }
+
+    std::ofstream directionOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/direction", std::ofstream::out);
+    if (!directionOf.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio direction!");
+        return ipmi::responseUnspecifiedError();
+    }
+    if (value) {
+        /* set to input mode allow HW pullup to pull it up */
+        directionOf << "in";
+    }
+    else {
+        /* set to ouput, then set value to 0 */
+        directionOf << "out";
+        std::ofstream valueOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/value", std::ofstream::out);
+        if (!valueOf.is_open()) {
+            directionOf.close();
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to open gpio value!");
+            return ipmi::responseUnspecifiedError();
+        }
+        valueOf << "0";
+        valueOf.close();
+    }
+    directionOf.close();
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
+{
+    using namespace ipmi::nvidia::misc;
+    /* break up by type of transaction required */
+    if (type == getWPTypePEX) {
+        if ((id >= getWPIdPexSW0)&&(id <= getWPIdPexSW3)) {
+            return getWpStatusFromMidFPGA(id - getWPIdPexSW0,
+                                            nvidia::fpgaMidPexSwWpReg,
+                                            nvidia::fpgaI2cAddress);
+        }
+        else {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown PEX device id for WP requested");
+        }
+    }
+    else if (type == getWPTypeFRU) {
+        switch (id) {
+            case getWPIdMB:
+            case getWPIdM2:
+                return getGpioCmd(nvidia::mbWpGpioChip, nvidia::mbWpGpioId);
+            case getWPIdMid:
+                return getWpStatusFromMidFPGA(nvidia::fpgaMidWpMidBit,
+                                    nvidia::fpgaMidWpReg, nvidia::fpgaI2cAddress);
+            case getWPIdIOEL:
+                return getWpStatusFromMidFPGA(nvidia::fpgaMidWpIOELBit,
+                                    nvidia::fpgaMidWpReg, nvidia::fpgaI2cAddress);
+            case getWpIdIOER:
+                return getWpStatusFromMidFPGA(nvidia::fpgaMidWpIOERBit,
+                                    nvidia::fpgaMidWpReg, nvidia::fpgaI2cAddress);
+            case getWpIdPDB:
+                return getWpStatusFromMidFPGA(nvidia::fpgaMidWpPDB,
+                                    nvidia::fpgaMidWpReg, nvidia::fpgaI2cAddress);
+            case getWpIdGB:
+                return getWpStatusGB();
+            case getWpIdSW:
+                return getWpStatusFromMidFPGA(nvidia::fpgaMidWpSw,
+                                    nvidia::fpgaMidWpReg, nvidia::fpgaI2cAddress);
+            default:
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown FRU device id for WP requested");
+        }
+    }
+    else {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown device type for WP requested");
+    }
+    return ipmi::responseResponseError();
+}
+
+ipmi::RspType<> ipmiOemMiscSetWP(uint8_t type, uint8_t id, uint8_t value)
+{
+    using namespace ipmi::nvidia::misc;
+    /* break up by type of transaction required */
+    if (type == getWPTypePEX) {
+        if ((id >= getWPIdPexSW0)&&(id <= getWPIdPexSW3)) {
+            return setWpStatusFromMidFPGA(id - getWPIdPexSW0, nvidia::fpgaMidPexSwWpReg,
+                                            nvidia::fpgaI2cAddress, value);
+        }
+        else {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown PEX device id for WP requested");
+        }
+    }
+    else if (type == getWPTypeFRU) {
+        switch (id) {
+            case getWPIdMB:
+            case getWPIdM2:
+                return setGpioCmd(nvidia::mbWpGpioChip, nvidia::mbWpGpioId, value);
+            case getWPIdMid:
+                return setWpStatusFromMidFPGA(nvidia::fpgaMidWpMidBit, nvidia::fpgaMidWpReg,
+                                                nvidia::fpgaI2cAddress, value);
+            case getWPIdIOEL:
+                return setWpStatusFromMidFPGA(nvidia::fpgaMidWpIOELBit, nvidia::fpgaMidWpReg,
+                                                nvidia::fpgaI2cAddress, value);
+            case getWpIdIOER:
+                return setWpStatusFromMidFPGA(nvidia::fpgaMidWpIOERBit, nvidia::fpgaMidWpReg,
+                                                nvidia::fpgaI2cAddress, value);
+            case getWpIdPDB:
+                return setWpStatusFromMidFPGA(nvidia::fpgaMidWpPDB, nvidia::fpgaMidWpReg,
+                                                nvidia::fpgaI2cAddress, value);
+            case getWpIdGB:
+                return setWpStatusGB(value);
+            case getWpIdSW:
+                return setWpStatusFromMidFPGA(nvidia::fpgaMidWpSw, nvidia::fpgaMidWpReg,
+                                                nvidia::fpgaI2cAddress, value);
+            default:
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown FRU device id for WP requested");
+        }
+    }
+    else {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown device type for WP requested");
+    }
+    return ipmi::responseResponseError();
+}
+
+
 } // namespace ipmi
+
 void registerNvOemFunctions()
 {
     log<level::NOTICE>(
@@ -2088,5 +2371,24 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetDeviceFirmwareVersion,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscFirmwareVersion);
+
+    // <Get WP status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetWpStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetWpStatus,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemMiscGetWP);
+
+    // <Set WP status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetWpStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSetWpStatus,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemMiscSetWP);
+
     return;
 }

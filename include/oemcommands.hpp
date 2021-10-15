@@ -47,6 +47,8 @@ constexpr auto cmdSMBPBIPassthrough = 0x09;
 constexpr auto cmdSMBPBIPassthroughExtended = 0x0A;
 constexpr auto cmdGetPSUInventory = 0x0E;
 constexpr auto cmdGetDeviceFirmwareVersion = 0x0F;
+constexpr auto cmdGetWpStatus = 0x8A;
+constexpr auto cmdSetWpStatus = 0x8B;
 
 constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
 constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;
@@ -65,6 +67,23 @@ constexpr auto getFirmwareVersionDevicePEXSwitch2 = 0x12;
 constexpr auto getFirmwareVersionDevicePEXSwitch3 = 0x13;
 constexpr auto getFirmwareVersionDeviceBMCActive = 0x20;
 constexpr auto getFirmwareVersionDeviceBMCInactive = 0x21;
+
+constexpr auto getWPTypePEX = 0x00;
+constexpr auto getWPTypeFRU = 0x01;
+
+constexpr auto getWPIdPexSW0 = 0x00;
+constexpr auto getWPIdPexSW1 = 0x01;
+constexpr auto getWPIdPexSW2 = 0x02;
+constexpr auto getWPIdPexSW3 = 0x03;
+
+constexpr auto getWPIdMB = 0x00;
+constexpr auto getWPIdMid = 0x01;
+constexpr auto getWPIdIOEL = 0x02;
+constexpr auto getWpIdIOER = 0x03;
+constexpr auto getWpIdPDB = 0x04;
+constexpr auto getWpIdGB = 0x05;
+constexpr auto getWPIdM2 = 0x06;
+constexpr auto getWpIdSW = 0x07;
 
 } // namespace misc
 

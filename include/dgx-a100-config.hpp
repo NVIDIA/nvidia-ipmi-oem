@@ -32,6 +32,13 @@ constexpr auto fpgaMbI2cBus             = 1;
 constexpr auto fpgaMidI2cBus            = 2;
 constexpr auto fpgaMbVersionAddr        = 0x00;
 constexpr auto fpgaMidVersionAddr       = 0x2d;
+constexpr auto fpgaMidWpReg             = 0x30;
+constexpr auto fpgaMidPexSwWpReg        = 0x21;
+constexpr auto fpgaMidWpMidBit          = 1;
+constexpr auto fpgaMidWpIOELBit         = 4;
+constexpr auto fpgaMidWpIOERBit         = 3;
+constexpr auto fpgaMidWpPDB             = 0;
+constexpr auto fpgaMidWpSw              = 2;
 constexpr auto cecI2cAddress            = 0x55;
 constexpr auto cecI2cBus                = 1;
 constexpr auto cecI2cFwSlotReg          = 0x9B;
@@ -46,6 +53,13 @@ constexpr uint8_t pexSwitchVersionWrite[] = {0x04, 0x00, 0x3C, 0x84};
 constexpr auto gpFpgaSmbpbiDeviceId         = 0; /* 0 indexed */
 constexpr auto gbFpgaSmbpbiVersionOpcode    = 0x05;
 constexpr auto gbFpgaSmbpbiVersionArg1      = 0x88;
+constexpr auto gbFpgaSmbpbiWpOpcode         = 0xb4;
+constexpr auto gbFpgaSmbpbiWpReadArg1       = 0xff;
+constexpr auto gbFpgaSmbpbiWpMask           = 0x02;
+constexpr auto gbFpgaSmbpbiWpWriteArg1      = 0x81;
+
+constexpr auto mbWpGpioId                   = 55;
+constexpr auto mbWpGpioChip                 = "gpiochip792";
 
 } //namespace nvidia
 } //namespace ipmi
