@@ -55,6 +55,7 @@ constexpr auto cmdGetSSDLed = 0x64;
 constexpr auto cmdGetLedStatus = 0x65;
 constexpr auto cmdGetWpStatus = 0x8A;
 constexpr auto cmdSetWpStatus = 0x8B;
+constexpr auto cmdGetPsuPower = 0x78;
 
 constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
 constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;

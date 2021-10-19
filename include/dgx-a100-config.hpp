@@ -27,6 +27,8 @@ constexpr auto psuRegVendorLen          = 0x06;
 constexpr auto psuRegModel              = 0x9B;
 constexpr auto psuRegModelLen           = 0x06;
 constexpr auto psuRegFWVersion          = 0xE2;
+constexpr auto psuRegPowerReal          = 0x96;
+constexpr auto pseRegPowerAparent       = 0xA7;
 
 constexpr auto fpgaI2cAddress           = 0x3c;
 constexpr auto fpgaMbI2cBus             = 1;

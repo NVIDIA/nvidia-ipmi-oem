@@ -2350,6 +2350,66 @@ ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode) {
     return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
+// convert from 16-bit linear FP representation
+static uint16_t PsuLinearConversion(uint16_t raw) {
+    uint16_t n, ret;
+
+    n = (raw >> 11) & 0x1f;  //[15:11]
+    ret = raw & 0x7ff;         //[10:0]
+
+    // Pout = Y * 2^N
+    if (n & 0x10) {//n is negative
+        // convert from 2's complement
+        n = (~n & 0x0f) + 1;
+        // shift down appropiate amount
+        ret = ret >> n;
+    }
+    else {
+        //n is positive, shift up
+        ret = ret << n;
+    }
+
+    return ret;
+}
+
+
+ipmi::RspType<uint16_t, uint16_t, uint8_t> ipmiOemPsuPower(uint8_t type, uint8_t id) {
+    if ((type != 0x00)||(id >=6)) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Invalid type or PSU number");
+        return ipmi::responseInvalidFieldRequest();
+    }
+
+    std::vector<uint8_t> powerRaw(2);
+
+    auto ret = psuReadInformation(id, nvidia::psuRegPowerReal, powerRaw);
+    if (ret != ipmi::ccSuccess) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to read real power from PSU");
+        return ipmi::responseResponseError();
+    }
+    uint16_t realPower = PsuLinearConversion(((uint16_t)powerRaw[1] << 8) | (powerRaw[0]));
+    ret = psuReadInformation(id, nvidia::pseRegPowerAparent, powerRaw);
+    if (ret != ipmi::ccSuccess) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to read apparent power from PSU");
+        return ipmi::responseResponseError();
+    }
+    uint16_t aparPower = PsuLinearConversion(((uint16_t)powerRaw[1] << 8) | (powerRaw[0]));
+    uint8_t pf = 0;
+    if ((aparPower == 0)&&(realPower == 0)) {
+        pf = 100; /*both are too low to measure, but close to eachother */
+    }
+    else if (aparPower == 0) {
+        pf = 0;
+    }
+    else {
+        pf = ((uint32_t)realPower * 100)/aparPower;
+    }
+
+    return ipmi::responseSuccess(realPower, aparPower, pf);
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -2663,5 +2723,15 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetLedStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemGetLedStatus);
+
+    // <Get PSU Power>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetPsuPower));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetPsuPower,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemPsuPower);
+
     return;
 }
