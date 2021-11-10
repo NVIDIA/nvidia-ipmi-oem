@@ -7,6 +7,7 @@
 #pragma once
 
 #include <unistd.h>
+#include <string>
 
 namespace ipmi
 {
@@ -60,6 +61,14 @@ constexpr auto gbFpgaSmbpbiWpWriteArg1      = 0x81;
 
 constexpr auto mbWpGpioId                   = 55;
 constexpr auto mbWpGpioChip                 = "gpiochip792";
+
+constexpr auto fanServiceName               = "phosphor-pid-control";
+constexpr auto fanNoServiceSpeed            = 100;
+constexpr auto fanZones                     = 3;
+constexpr auto fanZoneCtrlName0             = "";
+constexpr auto fanZoneCtrlName1             = "max31790@20";
+constexpr auto fanZoneCtrlName2             = "max31790@2c";
+
 
 } //namespace nvidia
 } //namespace ipmi

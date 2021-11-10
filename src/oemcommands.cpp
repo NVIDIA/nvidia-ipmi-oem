@@ -1274,91 +1274,126 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
 }
 
 ipmi::RspType<uint8_t>
-ipmiSetAllFanZonesPWMDuty(uint8_t request)
+ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t request)
 {
+    std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
+                                        nvidia::fanZoneCtrlName1,
+                                        nvidia::fanZoneCtrlName2};
+    /* if not valid zone, return error */
+    if (zone >= nvidia::fanZones) {
+        return ipmi::response(ipmi::ccInvalidFieldRequest);
+    }
 
-    int value = 255;
-	if ((request%10 == 0) && (request <= 100) && (request >= 20))
-	{
-		value = value*request/100;
-		std::ofstream ofs;
-		for(int i=6; i<=7; i++)
-		{
-			std::string path("/sys/class/hwmon/");
-			path = path + "hwmon" + std::to_string(i) + "/pwm1";
-			if (!ofs.is_open())
-			{
-				ofs.open(path);
-			}
-			ofs.clear();
-			ofs.seekp(0);
-			ofs << value;
-			ofs.close();
-		}
-		return ipmi::responseSuccess();
-	}
-	else
-	{
-		return ipmi::response(ipmi::ccInvalidFieldRequest);
+    /* if zone control namae is blank, return success */
+    if (fanZoneHwMonNames[zone].length() == 0) {
+        return ipmi::responseSuccess();
+    }
+
+    /* get the control paths for the fans */
+    std::array<std::string, nvidia::fanZones> ctrlPaths = {"", "", ""};
+    std::filesystem::path hwmonPath("/sys/class/hwmon/");
+    for (auto const& path : std::filesystem::directory_iterator{hwmonPath}) {
+        /* get the name from this hwmon path */
+        std::filesystem::path namePath = path;
+        namePath /= "uevent";
+        std::ifstream nameFile(namePath);
+        if (!nameFile.is_open()) {
+            phosphor::logging::log<level::ERR>(
+                "ipmiSetFanZonePWMDuty: Failed to open hwmon name file");
+            continue;
+        }
+        /* use uevent interface to get pull name, which includes address for i2c
+            devices */
+        std::string fullname;
+        while (!nameFile.eof()) {
+            std::string l;
+            nameFile >> l;
+            if (boost::starts_with(l, "OF_FULLNAME")) {
+                fullname = l;
+            }
+        }
+
+        if (fullname.length() == 0) {
+            continue;
+        }
+
+        /* now iterate through HwMon expected names and find a match */
+        for (int i = 0; i < nvidia::fanZones; i++) {
+            if (fanZoneHwMonNames[i].length() == 0) {
+                continue;
+            }
+            if (ctrlPaths[i].length() != 0) {
+                continue;
+            }
+            if (boost::ends_with(fullname, fanZoneHwMonNames[i])) {
+                ctrlPaths[i] = path.path();
+                ctrlPaths[i] += "/pwm1";
+                break;
+            }
+        }
+    }
+
+    /* convert control % to a pwm value */
+	int value = 255;
+    if ((request%10 == 0) && (request <= 100) && (request >= 20))
+    {
+        value = value*request/100;
+        std::ofstream ofs(ctrlPaths[zone]);
+        if (!ofs.is_open())
+        {
+             phosphor::logging::log<level::ERR>(
+                "ipmiSetFanZonePWMDuty: Failed to open hwmon pwm file");
+             return ipmi::response(ipmi::ccResponseError);
+        }
+        ofs << value;
+        ofs.close();
+        return ipmi::responseSuccess();
+    }
+    else {
+        return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
 }
 
-ipmi::RspType<uint8_t, std::vector<uint8_t>>
-ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t request)
+ipmi::RspType<uint8_t>
+ipmiSetAllFanZonesPWMDuty(uint8_t request)
 {
-	int value = 255;
-	if(zone == 0x00)
-	{
-		return ipmi::responseSuccess();
-	}
-	else if(zone == 0x01)
-	{
-		if ((request%10 == 0) && (request <= 100) && (request >= 20))
-		{
-			value = value*request/100;
-			std::ofstream ofs;
-			std::string path("/sys/class/hwmon/hwmon6/pwm1");
-			if (!ofs.is_open())
-			{
-				ofs.open(path);
-			}
-			ofs.clear();
-			ofs.seekp(0);
-			ofs << value;
-			ofs.close();
-			return ipmi::responseSuccess();
-		}
-		else
-		{
-			return ipmi::response(ipmi::ccInvalidFieldRequest);
-		}
-	}
-	else if(zone == 0x02)
-	{
-		if ((request%10 == 0) && (request <= 100) && (request >= 20))
-		{
-			value = value*request/100;
-			std::ofstream ofs;
-			std::string path("/sys/class/hwmon/hwmon7/pwm1");
-			if (!ofs.is_open())
-			{
-				ofs.open(path);
-			}
-			ofs.clear();
-			ofs.seekp(0);
-			ofs << value;
-			ofs.close();
-			return ipmi::responseSuccess();
-		}
-		else
-		{
-			return ipmi::response(ipmi::ccInvalidFieldRequest);
-		}
-	}
-	else
-	{
-		return ipmi::response(ipmi::ccInvalidFieldRequest);
-	}
+    for (int i = 0; i < nvidia::fanZones; i++) {
+        auto r = ipmiSetFanZonePWMDuty(i, request);
+        if (r != ipmi::responseSuccess()) {
+            phosphor::logging::log<level::ERR>(
+                "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
+            return r;
+        }
+    }
+    return ipmi::responseSuccess();;
+}
+
+ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode) {
+    if (mode == 0x00) {
+        /* auto mode startup the fan control service */
+        std::string startupFanString = "systemctl start ";
+        startupFanString += nvidia::fanServiceName;
+        auto r = system(startupFanString.c_str());
+        if (r != 0) {
+            /* log that the fan control service doesn't exist */
+            phosphor::logging::log<level::ERR>(
+                "ipmiSetFanControl: failed to start auto fan service, falling back to default speed");
+            /* set fans to default speed, we will support this as "auto", so we
+                still return success via ipmi */
+            return ipmiSetAllFanZonesPWMDuty(nvidia::fanNoServiceSpeed);
+        }
+        return ipmi::responseSuccess();
+    }
+    else if (mode == 0x01) {
+        /* manual mode, stop fan service */
+        std::string stopFanString = "systemctl stop ";
+        stopFanString += nvidia::fanServiceName;
+        system(stopFanString.c_str());
+
+        /* set fans to default speed */
+        return ipmiSetAllFanZonesPWMDuty(nvidia::fanNoServiceSpeed);
+    }
+    return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
 ipmi::RspType<uint8_t, std::string> ipmiGetPSUInventory(
@@ -2329,6 +2364,16 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdSMBPBIPassthroughExtended,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughExtendedCmd);
+
+    // <Set fan control mode>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetFanMode));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::app::cmdSetFanMode,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetFanControl);
 
     // <Set All Fan Zones PWM Duty>
     log<level::NOTICE>(

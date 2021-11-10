@@ -31,6 +31,7 @@ constexpr auto cmdGetNTPConfig = 0xA7;
 constexpr auto cmdSetNTPConfig = 0xA8;
 constexpr auto cmdGetDNSConfig = 0x6B;
 constexpr auto cmdSetDNSConfig = 0x6C;
+constexpr auto cmdSetFanMode = 0x73;
 constexpr auto cmdAllFanZonesPWMDuty = 0x74;
 constexpr auto cmdSetFanZonePWMDuty = 0x75;
 constexpr auto cmdGetBiosPostStatus = 0x25;
