@@ -69,6 +69,13 @@ constexpr auto fanZoneCtrlName0             = "";
 constexpr auto fanZoneCtrlName1             = "max31790@20";
 constexpr auto fanZoneCtrlName2             = "max31790@2c";
 
+constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor "
+                                              "xyz.openbmc_project.externalsensor "
+                                              "xyz.openbmc_project.hwmontempsensor "
+                                              "xyz.openbmc_project.mcutempsensor "
+                                              "xyz.openbmc_project.psusensor "
+                                              "nvidia-gpu-manager "
+                                              "xyz.openbmc_project.fansensor";
 
 } //namespace nvidia
 } //namespace ipmi

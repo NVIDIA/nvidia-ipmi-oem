@@ -49,6 +49,7 @@ constexpr auto cmdSMBPBIPassthrough = 0x09;
 constexpr auto cmdSMBPBIPassthroughExtended = 0x0A;
 constexpr auto cmdGetPSUInventory = 0x0E;
 constexpr auto cmdGetDeviceFirmwareVersion = 0x0F;
+constexpr auto cmdSensorScanEnable = 0x85;
 constexpr auto cmdGetWpStatus = 0x8A;
 constexpr auto cmdSetWpStatus = 0x8B;
 

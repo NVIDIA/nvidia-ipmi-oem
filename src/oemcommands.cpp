@@ -2181,6 +2181,37 @@ ipmi::RspType<> ipmiOemMiscSetWP(uint8_t type, uint8_t id, uint8_t value)
 }
 
 
+ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode) {
+    if (mode == 0x00) {
+        /* stop services that scan sensors */
+        std::string stopSensorScan = "systemctl stop ";
+        stopSensorScan += nvidia::sensorScanSerivcesList;
+        auto r = system(stopSensorScan.c_str());
+        if (r != 0) {
+            /* log that the stop failed */
+            phosphor::logging::log<level::ERR>(
+                "ipmiSensorScanEnableDisable: failed to stop services");
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess();
+    }
+    else if (mode == 0x01) {
+        /* start services */
+        std::string startSensorScan = "systemctl start ";
+        startSensorScan += nvidia::sensorScanSerivcesList;
+        auto r = system(startSensorScan.c_str());
+
+        if (r != 0) {
+            /* log that the stop failed */
+            phosphor::logging::log<level::ERR>(
+                "ipmiSensorScanEnableDisable: failed to start services");
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess();
+    }
+    return ipmi::response(ipmi::ccInvalidFieldRequest);
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -2458,5 +2489,13 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdI2CMasterReadWrite,
                           ipmi::Privilege::Admin, ipmi::ipmiI2CMasterReadWrite);
+    // <Enable/Disable sensor scanning>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSensorScanEnable));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSensorScanEnable,
+                          ipmi::Privilege::Admin, ipmi::ipmiSensorScanEnableDisable);
     return;
 }
