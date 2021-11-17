@@ -116,6 +116,7 @@ static std::tuple <int, std::string>
     if (!pipe) {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Exec busctl cmd popen failed!");
+	return make_tuple(-1, result);
     }
 
     // Read till end of process
