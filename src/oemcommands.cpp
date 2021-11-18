@@ -947,6 +947,20 @@ ipmi::RspType<uint8_t> ipmiGetRshimState()
     return ipmi::responseSuccess(status);
 }
 
+ipmi::RspType<std::vector<uint8_t>> ipmiI2CMasterReadWrite(
+                                                uint8_t bus,
+                                                uint8_t slaveAddr,
+                                                uint8_t readCount,
+                                                std::vector<uint8_t> writeData) {
+    std::vector<uint8_t> rdData(readCount);
+    /* slaveaddr is expected to be in 8bit format, i2cTransaction expects 7bit */
+    auto ret = i2cTransaction(bus, slaveAddr >> 1, writeData, rdData);
+    if (ret != ipmi::ccSuccess) {
+        return ipmi::response(ret);
+    }
+    return ipmi::responseSuccess(rdData);
+}
+
 ipmi::RspType<
     uint8_t,  // Major Version
     uint8_t  // Minor Version
@@ -2391,5 +2405,13 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdSetWpStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscSetWP);
 
+    // <Master Read Write>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemPost),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdI2CMasterReadWrite));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
+                          ipmi::nvidia::app::cmdI2CMasterReadWrite,
+                          ipmi::Privilege::Admin, ipmi::ipmiI2CMasterReadWrite);
     return;
 }

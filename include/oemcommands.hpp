@@ -34,6 +34,7 @@ constexpr auto cmdSetDNSConfig = 0x6C;
 constexpr auto cmdAllFanZonesPWMDuty = 0x74;
 constexpr auto cmdSetFanZonePWMDuty = 0x75;
 constexpr auto cmdGetBiosPostStatus = 0x25;
+constexpr auto cmdI2CMasterReadWrite = 0x81;
 
 } // namespace app
 
