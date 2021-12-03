@@ -40,6 +40,12 @@ constexpr auto fpgaMidWpIOELBit         = 4;
 constexpr auto fpgaMidWpIOERBit         = 3;
 constexpr auto fpgaMidWpPDB             = 0;
 constexpr auto fpgaMidWpSw              = 2;
+constexpr auto fpgaMidSSDLedReadyMove   = 0x0e;
+constexpr auto fpgaMidSSDLedActivity    = 0x0c;
+constexpr auto fpgaMidSSDLedFaultBase   = 0x08;
+constexpr auto fpgaMidSSDLedFaultWidth  = 3;
+constexpr auto fpgaMidSetLedFaultMaxPattern = 4;
+constexpr auto fpgaMidSetLedOtherMaxPattern = 1;
 constexpr auto cecI2cAddress            = 0x55;
 constexpr auto cecI2cBus                = 1;
 constexpr auto cecI2cFwSlotReg          = 0x9B;
@@ -76,6 +82,9 @@ constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor
                                               "xyz.openbmc_project.psusensor "
                                               "nvidia-gpu-manager "
                                               "xyz.openbmc_project.fansensor";
+constexpr auto powerLedName                 = "power_led";
+constexpr auto faultLedName                 = "fault_led";
+constexpr auto mbLedName                    = "motherboard_debug_led";
 
 } //namespace nvidia
 } //namespace ipmi

@@ -50,6 +50,9 @@ constexpr auto cmdSMBPBIPassthroughExtended = 0x0A;
 constexpr auto cmdGetPSUInventory = 0x0E;
 constexpr auto cmdGetDeviceFirmwareVersion = 0x0F;
 constexpr auto cmdSensorScanEnable = 0x85;
+constexpr auto cmdSetSSDLed = 0x63;
+constexpr auto cmdGetSSDLed = 0x64;
+constexpr auto cmdGetLedStatus = 0x65;
 constexpr auto cmdGetWpStatus = 0x8A;
 constexpr auto cmdSetWpStatus = 0x8B;
 
@@ -87,6 +90,16 @@ constexpr auto getWpIdPDB = 0x04;
 constexpr auto getWpIdGB = 0x05;
 constexpr auto getWPIdM2 = 0x06;
 constexpr auto getWpIdSW = 0x07;
+
+constexpr auto getSSDLedTypeReadyMove = 0x30;
+constexpr auto getSSDLedTypeActivity = 0x31;
+constexpr auto getSSDLedTypeFault = 0x32;
+
+constexpr auto getSSDLedNLed = 8;
+
+constexpr auto getLedStatusPowerLed = 0x00;
+constexpr auto getLedStatusFaultLed = 0x01;
+constexpr auto getLedStatusMotherBoardLed = 0x10;
 
 } // namespace misc
 

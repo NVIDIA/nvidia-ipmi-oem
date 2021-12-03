@@ -2180,6 +2180,144 @@ ipmi::RspType<> ipmiOemMiscSetWP(uint8_t type, uint8_t id, uint8_t value)
     return ipmi::responseResponseError();
 }
 
+static uint8_t getSSDLedRegister(uint8_t type, uint8_t instance, uint8_t &offset, uint8_t &mask) {
+    using namespace ipmi::nvidia::misc;
+    uint8_t reg = 0;
+    offset = instance;
+    mask = (1 << instance);
+    switch (type) {
+        case getSSDLedTypeReadyMove:
+            reg = nvidia::fpgaMidSSDLedReadyMove;
+        break;
+        case getSSDLedTypeActivity:
+            reg = nvidia::fpgaMidSSDLedActivity;
+        break;
+        case getSSDLedTypeFault:
+            /*  offset 0 = instance 7, 6
+                offset 1 = instance 5, 4
+                offset 2 = instance 3, 2
+                offset 3 = instance 1, 0 */
+            reg = nvidia::fpgaMidSSDLedFaultBase + (((getSSDLedNLed - 1) - instance) >> 1);
+            /*  each register is:
+                    xxbb baaa
+                where aaa is 0 and bbb is 1 */
+            offset = nvidia::fpgaMidSSDLedFaultWidth * (instance & 0x01);
+            mask = ((1 << nvidia::fpgaMidSSDLedFaultWidth) - 1) << offset;
+        break;
+    }
+    return reg;
+}
+
+ipmi::RspType<uint8_t> ipmiOemGetSSDLed(uint8_t type, uint8_t instance) {
+    using namespace ipmi::nvidia::misc;
+
+    if (instance >= getSSDLedNLed) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Invalid SSD LED Instance");
+        return ipmi::responseResponseError();
+    }
+
+    /* get register, offset, mask information */
+    uint8_t reg, offset, mask;
+    reg = getSSDLedRegister(type, instance, offset, mask);
+    if (reg == 0) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Invalid SSD LED type");
+        return ipmi::responseResponseError();
+    }
+
+    /* get appropriate register */
+    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> readBuf(1);
+    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress, writeData, readBuf);
+    if (ret != ipmi::ccSuccess) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to get SSD Led status from FPGA");
+            return ipmi::responseResponseError();
+    }
+
+    /* decode and return */
+    return ipmi::responseSuccess(readBuf[0] & mask >> offset);
+}
+
+ipmi::RspType<> ipmiOemSetSSDLed(uint8_t type, uint8_t instance, uint8_t pattern) {
+    using namespace ipmi::nvidia::misc;
+
+    if ((instance >= getSSDLedNLed)||
+        ((type == getSSDLedTypeFault)&&(pattern > nvidia::fpgaMidSetLedFaultMaxPattern))||
+        ((type != getSSDLedTypeFault)&&(pattern > nvidia::fpgaMidSetLedOtherMaxPattern))||
+        (type == getSSDLedTypeActivity)) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Invalid SSD LED Type, Instance or Pattern");
+        return ipmi::responseResponseError();
+    }
+
+    /* get register, offset, mask information */
+    uint8_t reg, offset, mask;
+    reg = getSSDLedRegister(type, instance, offset, mask);
+    if (reg == 0) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Invalid SSD LED type");
+        return ipmi::responseResponseError();
+    }
+
+    /* get appropriate register */
+    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> readBuf(1);
+    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress, writeData, readBuf);
+    if (ret != ipmi::ccSuccess) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to get SSD Led status from FPGA");
+            return ipmi::responseResponseError();
+    }
+
+    /* adjust register and write it out */
+    writeData.push_back((readBuf[0] & ~mask) | (pattern << offset));
+    ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress, writeData, readBuf);
+    if (ret != ipmi::ccSuccess) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to set SSD Led pattern to FPGA");
+            return ipmi::responseResponseError();
+    }
+
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t> ipmiOemGetLedStatus(uint8_t type) {
+    using namespace ipmi::nvidia::misc;
+    std::string ledPath = "/sys/class/leds/";
+    switch (type) {
+        case getLedStatusPowerLed:
+            ledPath += nvidia::powerLedName;
+        break;
+        case getLedStatusFaultLed:
+            ledPath += nvidia::faultLedName;
+        break;
+        case getLedStatusMotherBoardLed:
+            ledPath += nvidia::mbLedName;
+        break;
+        default:
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unknown LED type requested");
+            return ipmi::responseResponseError();
+    }
+
+    /* have path to led, open brightness and check if it is 0 */
+    int brightness;
+    std::ifstream ledBrightness(ledPath + "/brightness");
+    if (!ledBrightness.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Unable to open LED brightness file");
+        return ipmi::responseResponseError();
+    }
+    ledBrightness >> brightness;
+    ledBrightness.close();
+    if (brightness != 0) {
+        return ipmi::responseSuccess(1);
+    }
+    return ipmi::responseSuccess(0);
+}
+
 
 ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode) {
     if (mode == 0x00) {
@@ -2489,6 +2627,7 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdI2CMasterReadWrite,
                           ipmi::Privilege::Admin, ipmi::ipmiI2CMasterReadWrite);
+
     // <Enable/Disable sensor scanning>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
@@ -2497,5 +2636,32 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSensorScanEnable,
                           ipmi::Privilege::Admin, ipmi::ipmiSensorScanEnableDisable);
+
+    // <Get SSD LED Status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetSSDLed));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetSSDLed,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemGetSSDLed);
+
+    // <Set SSD LED Status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetSSDLed));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSetSSDLed,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemSetSSDLed);
+
+    // <Get LED Status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetLedStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetLedStatus,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemGetLedStatus);
     return;
 }
