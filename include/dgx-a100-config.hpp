@@ -88,5 +88,8 @@ constexpr auto powerLedName                 = "power_led";
 constexpr auto faultLedName                 = "fault_led";
 constexpr auto mbLedName                    = "motherboard_debug_led";
 
+constexpr auto biosGpioId                   = 74;
+constexpr auto biosGpioChip                 = mbWpGpioChip;
+
 } //namespace nvidia
 } //namespace ipmi

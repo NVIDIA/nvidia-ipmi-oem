@@ -18,6 +18,7 @@ constexpr auto netFnOemPost = 0x30;
 
 namespace app
 {
+constexpr auto cmdSetBiosVersion = 0x10;
 constexpr auto cmdSystemFactoryReset = 0x66;
 constexpr auto cmdSetVendorFieldModeConfig = 0x67;
 constexpr auto cmdGetVendorFieldModeConfig = 0x68;
@@ -57,6 +58,12 @@ constexpr auto cmdGetLedStatus = 0x65;
 constexpr auto cmdGetWpStatus = 0x8A;
 constexpr auto cmdSetWpStatus = 0x8B;
 constexpr auto cmdGetPsuPower = 0x78;
+constexpr auto cmdGetBiosBootupImage = 0x1E;
+constexpr auto cmdGetBiosConfig = 0x21;
+constexpr auto cmdGetBiosNextImage = 0x22;
+constexpr auto cmdSetBiosNextImage = 0x23;
+constexpr auto cmdGetBiosVerions = 0x24;
+constexpr auto cmdSetBiosConfig = 0x25;
 
 constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
 constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;
@@ -102,6 +109,9 @@ constexpr auto getSSDLedNLed = 8;
 constexpr auto getLedStatusPowerLed = 0x00;
 constexpr auto getLedStatusFaultLed = 0x01;
 constexpr auto getLedStatusMotherBoardLed = 0x10;
+
+constexpr auto biosConfigTypeNetwork = 0x01;
+constexpr auto biosConfigTypeRedFish = 0x02;
 
 } // namespace misc
 

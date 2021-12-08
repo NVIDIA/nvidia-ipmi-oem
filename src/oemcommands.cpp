@@ -8,6 +8,8 @@
 
 #include "dgx-a100-config.hpp"
 
+#include "biosversionutils.hpp"
+
 #include <ipmid/api.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/utils.hpp>
@@ -2123,24 +2125,57 @@ static int gpioExport(std::string gpiochip, uint32_t gpio) {
     return gpio;
 }
 
-static ipmi::RspType<uint8_t> getGpioCmd(std::string gpiochip, uint32_t gpio)
-{
+static bool getGpioRaw(std::string gpiochip, uint32_t gpio, uint8_t &v) {
     int gp = gpioExport(gpiochip, gpio);
     if (gp < 0) {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Failed to export gpio!");
-        return ipmi::responseUnspecifiedError();
+        return false;
     }
     std::ifstream valueIf("/sys/class/gpio/gpio" + std::to_string(gp) + "/value", std::ifstream::in);
     if (!valueIf.is_open()) {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Failed to open gpio value!");
-        return ipmi::responseUnspecifiedError();
+        return false;
     }
     int r;
     valueIf >> r;
+    v = r;
+    return true;
+}
+
+static ipmi::RspType<uint8_t> getGpioCmd(std::string gpiochip, uint32_t gpio)
+{
+    uint8_t r;
+    if (!getGpioRaw(gpiochip, gpio, r)) {
+        return ipmi::responseUnspecifiedError();
+    }
 
     return ipmi::responseSuccess(r);
+}
+
+static bool setGpioRaw(std::string gpiochip, uint32_t gpio, uint32_t value) {
+    int gp = gpioExport(gpiochip, gpio);
+
+    std::ofstream directionOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/direction", std::ofstream::out);
+    if (!directionOf.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio direction!");
+        return false;
+    }
+    /* set to ouput, then set value */
+    directionOf << "out";
+    directionOf.close();
+    std::ofstream valueOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/value", std::ofstream::out);
+    if (!valueOf.is_open()) {
+        directionOf.close();
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio value!");
+        return false;
+    }
+    valueOf << value;
+    valueOf.close();
+    return true;
 }
 
 static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio, uint32_t value)
@@ -2509,6 +2544,76 @@ ipmi::RspType<uint16_t, uint16_t, uint8_t> ipmiOemPsuPower(uint8_t type, uint8_t
     return ipmi::responseSuccess(realPower, aparPower, pf);
 }
 
+/* gets the bios boot slot */
+static uint8_t getBiosBootSlot(void) {
+    /* checked by looking at the GPIO */
+    uint8_t v;
+    if (!getGpioRaw(nvidia::biosGpioChip, nvidia::biosGpioId, v)) {
+        phosphor::logging::log<level::ERR>(
+                "Failed to read bootslot GPIO");
+        return 0;
+    }
+    /* secondary slot = 0, primary = 1 */
+    return v == 0 ? 1 : 0;
+}
+
+//BIOS test - Set BIOS version command (0x30 0x10)
+//Takes: Major (uint8_t), Minor (uint8_t)
+//Returns completion code
+ipmi::RspType<> ipmiBiosSetVersion(uint8_t major, uint8_t minor) {
+    std::stringstream msg;
+    uint8_t bootslot = getBiosBootSlot();
+    nvidia::BiosVersionInformation::get().updateBiosSlot(bootslot, major, minor);
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t> ipmiBiosGetBootImage(void) {
+    return ipmi::responseSuccess(nvidia::BiosVersionInformation::get().getLastBootSlot());
+}
+
+ipmi::RspType<uint8_t> ipmiBiosGetNextBootImage(void) {
+    return ipmi::responseSuccess(getBiosBootSlot());
+}
+
+ipmi::RspType<> ipmiBiosSetNextBootImage(uint8_t bootimage) {
+    if (!setGpioRaw(nvidia::biosGpioChip, nvidia::biosGpioId, bootimage ? 0 : 1)) {
+        phosphor::logging::log<level::ERR>(
+                "Failed to set bootslot GPIO");
+        return ipmi::responseResponseError();
+    }
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t, uint8_t> ipmiBiosGetVerion(uint8_t image) {
+    uint8_t major = 0, minor = 0;
+    if (nvidia::BiosVersionInformation::get().getBiosSlotInformation(image, major, minor)) {
+        return ipmi::responseSuccess(major, minor);
+    }
+    return ipmi::responseResponseError();
+}
+
+ipmi::RspType<uint8_t> ipmiBiosGetConfig(uint8_t type) {
+    using namespace ipmi::nvidia::misc;
+
+    if ((type != biosConfigTypeNetwork)&&(type != biosConfigTypeRedFish)) {
+        return ipmi::responseResponseError();
+    }
+
+    bool status = nvidia::BiosVersionInformation::get().getConfigFlag(type - 1);
+    return ipmi::responseSuccess((type & 0x7f) | (status ? 0x80 : 0x00));
+}
+
+ipmi::RspType<> ipmiBiosSetConfig(uint8_t type) {
+    using namespace ipmi::nvidia::misc;
+    bool status = ((type & 0x80) != 0);
+    type = type & 0x7f;
+    if ((type != biosConfigTypeNetwork)&&(type != biosConfigTypeRedFish)) {
+        return ipmi::responseResponseError();
+    }
+    nvidia::BiosVersionInformation::get().setConfigFlag(type - 1, status);
+    return ipmi::responseSuccess();
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -2841,5 +2946,67 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetPsuPower,
                           ipmi::Privilege::Admin, ipmi::ipmiOemPsuPower);
 
+    // <Bios set version>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemPost),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetBiosVersion));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
+                          ipmi::nvidia::app::cmdSetBiosVersion,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosSetVersion);
+
+    // <Bios get bootup image>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBiosBootupImage));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetBiosBootupImage,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosGetBootImage);
+
+    // <Bios get next bootup image>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBiosNextImage));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetBiosNextImage,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosGetNextBootImage);
+
+    // <Bios set next bootup image>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetBiosNextImage));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSetBiosNextImage,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosSetNextBootImage);
+
+    // <Get bios version>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBiosVerions));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetBiosVerions,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosGetVerion);
+
+    // <Get bios config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBiosConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetBiosConfig,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosGetConfig);
+
+    // <Set bios config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetBiosConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSetBiosConfig,
+                          ipmi::Privilege::Admin, ipmi::ipmiBiosSetConfig);
     return;
 }
