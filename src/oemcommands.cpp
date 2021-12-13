@@ -85,6 +85,15 @@ static constexpr auto activationIntf =
     "xyz.openbmc_project.Software.Activation";
 static constexpr auto softwareRoot = "/xyz/openbmc_project/software";
 
+// BIOS PostCode object in dbus
+static constexpr const char* postCodesService =
+    "xyz.openbmc_project.State.Boot.PostCode0";
+static constexpr const char* postCodesObjPath =
+    "/xyz/openbmc_project/State/Boot/PostCode0";
+static constexpr const char* postCodesIntf =
+    "xyz.openbmc_project.State.Boot.PostCode";
+const static constexpr char* postCodesProp = "CurrentBootCycleCount";
+
 // IPMI OEM Major and Minor version
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
 static constexpr uint8_t OEM_MINOR_VER = 0x00;
@@ -102,6 +111,8 @@ using PropertyMapType =
 
 namespace ipmi
 {
+// BIOS PostCode return error code
+static constexpr Cc ipmiCCBIOSPostCodeError = 0x89;
 
 static std::tuple <int, std::string>
     execBusctlCmd(std::string cmd)
@@ -1552,6 +1563,94 @@ ipmi::RspType<uint8_t> ipmiGetBiosPostStatus(uint8_t requestData)
     }
 }
 
+/** @brief implement to get the BIOS boot count
+ *  @returns status
+ */
+static int getBIOSbootCycCount(uint16_t& BootCycCount)
+{
+    BootCycCount = 0;
+
+    try
+    {
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        std::string service =
+            getService(*dbus, postCodesIntf, postCodesObjPath);
+        // get boot count
+        Value variant = getDbusProperty(*dbus, service, postCodesObjPath,
+                                        postCodesIntf, postCodesProp);
+        BootCycCount = static_cast<uint16_t>(std::get<std::uint16_t>(variant));
+
+        return ipmi::ccSuccess;
+    }
+    catch (const std::exception& e)
+    {
+        return ipmi::ccUnspecifiedError;
+    }
+}
+
+/** @brief Get the latest boot cycle's POST Code, if there is one.
+ ** @param[in] ctx   - ipmi Context point
+ ** @return   Boot Cycle indes, Post Code length, POST Code vector
+ **/
+ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
+    ipmiGetBiosPostCode(ipmi::Context::ptr ctx)
+{
+    uint64_t pcode = 0;
+    uint16_t bootIndex = 1; // 1 for the latest boot cycle's POST Code
+    uint16_t postVecLen = 0;
+    using postcode_t = std::tuple<uint64_t, std::vector<uint8_t>>;
+    postcode_t postCodeTup (0, {0});
+    std::vector<postcode_t> postCodeVector = {};
+    std::vector<uint8_t> postCodeVectorRet = {};
+
+    // to get the oldest POST Code
+    // getBIOSbootCycCount(bootIndex);
+
+    try
+    {
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        std::string service =
+            getService(*dbus, postCodesIntf, postCodesObjPath);
+        // call POST Code Service method
+        auto method = dbus->new_method_call (postCodesService, postCodesObjPath,
+                                             postCodesIntf, "GetPostCodes");
+        method.append(bootIndex);
+        auto postCodesMsgRet = dbus->call(method);
+
+        if (postCodesMsgRet.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                                   "Error returns from call to dbus.");
+            return ipmi::response(ipmiCCBIOSPostCodeError);
+        }
+
+        postCodesMsgRet.read(postCodeVector);
+        if (postCodeVector.empty())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                                   "No post code is found from call to dbus.");
+            return ipmi::response(ipmiCCBIOSPostCodeError);
+        }
+
+        postVecLen = postCodeVector.size();
+        for (int i = 0; i < postVecLen; i++)
+        {
+            postCodeTup = postCodeVector[i];
+            pcode = std::get<0>(postCodeTup);
+            postCodeVectorRet.push_back(pcode);
+            //sd_journal_print(LOG_ERR, "0x%02llx ", pcode);
+        }
+
+        return ipmi::responseSuccess(bootIndex, postVecLen, postCodeVectorRet);
+    }
+    catch (const std::exception& e)
+    {
+        return ipmi::response(ipmiCCBIOSPostCodeError);
+    }
+
+    return ipmi::response(ipmiCCBIOSPostCodeError);
+}
+
 ipmi::RspType<> ipmiOemSoftReboot()
 {
     /* TODO: Should be handled by dbus call once backend exists */
@@ -2642,6 +2741,15 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdGetBiosPostStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostStatus);
+
+    // <Get BIOS POST Code>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemPost),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetBiosPostCode));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
+                          ipmi::nvidia::app::cmdGetBiosPostCode,
+                          ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostCode);
 
     // <Soft Reboot>
     log<level::NOTICE>(
