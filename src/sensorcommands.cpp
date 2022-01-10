@@ -1691,6 +1691,7 @@ void registerSensorFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::netFnSensor,
                           ipmi::sensor_event::cmdPlatformEvent,
                           ipmi::Privilege::Operator, ipmiSenPlatformEvent);
+#ifdef USING_OEM_SENSOR
 
     // <Get Sensor Reading>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::netFnSensor,
@@ -1755,5 +1756,7 @@ void registerSensorFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::netFnStorage,
                           ipmi::storage::cmdGetSdr, ipmi::Privilege::User,
                           ipmiStorageGetSDR);
+#endif
+
 }
 } // namespace ipmi

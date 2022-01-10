@@ -85,3 +85,10 @@ target_compile_definitions (
     $<$<BOOL:${USE_ETH1_NETWORK_DEVICE}>:
     -DUSE_ETH1_NETWORK_DEVICE>
 )
+
+target_compile_definitions (
+    znvipmioemcmds PRIVATE
+    $<$<BOOL:${USING_OEM_SENSOR}>:
+    -DUSING_OEM_SENSOR>
+)
+
