@@ -1274,12 +1274,6 @@ ipmi::RspType<uint32_t> ipmiStorageGetSELTime()
     return ipmi::responseSuccess(selTime.tv_sec);
 }
 
-ipmi::RspType<> ipmiStorageSetSELTime(uint32_t selTime)
-{
-    // Set SEL Time is not supported
-    return ipmi::responseInvalidCommand();
-}
-
 std::vector<uint8_t> getType12SDRs(uint16_t index, uint16_t recordId)
 {
     std::vector<uint8_t> resp;
@@ -1414,11 +1408,6 @@ void registerStorageFunctions()
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
                           ipmi::storage::cmdGetSelTime, ipmi::Privilege::User,
                           ipmiStorageGetSELTime);
-
-    // <Set SEL Time>
-    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
-                          ipmi::storage::cmdSetSelTime,
-                          ipmi::Privilege::Operator, ipmiStorageSetSELTime);
 }
 } // namespace storage
 } // namespace ipmi
