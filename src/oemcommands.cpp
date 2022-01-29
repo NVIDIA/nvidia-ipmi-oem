@@ -1547,7 +1547,7 @@ ipmi::RspType<uint8_t> ipmiGetBiosPostStatus(uint8_t requestData)
                 // Workaround:Restart DIMM temperature reading and ipmi host
                 // when getting POST end service
                 system("systemctl restart phosphor-virtual-sensor.service");
-                system("systemctl restart phosphor-ipmi-host.service");
+                //system("systemctl restart phosphor-ipmi-host.service");
 
                 return ipmi::responseSuccess();
                 break;
