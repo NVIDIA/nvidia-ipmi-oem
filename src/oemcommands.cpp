@@ -118,6 +118,12 @@ static constexpr const char* postCodesIntf =
     "xyz.openbmc_project.State.Boot.PostCode";
 const static constexpr char* postCodesProp = "CurrentBootCycleCount";
 
+static constexpr const char* chassisStateService =
+    "xyz.openbmc_project.State.Chassis";
+static constexpr const char* chassisStatePath =
+    "/xyz/openbmc_project/state/chassis0";
+static constexpr const char* chassisStateIntf =
+    "xyz.openbmc_project.State.Chassis";
 // IPMI OEM Major and Minor version
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
 static constexpr uint8_t OEM_MINOR_VER = 0x00;
@@ -1690,6 +1696,18 @@ ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
     try
     {
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        // if chassis in power off state, return error code
+        auto powerState =
+            ipmi::getDbusProperty(*dbus, chassisStateService, chassisStatePath,
+                                  chassisStateIntf, "CurrentPowerState");
+        if (std::get<std::string>(powerState) ==
+            "xyz.openbmc_project.State.Chassis.PowerState.Off")
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Host is in power off state");
+            return ipmi::response(ipmiCCBIOSPostCodeError);
+        }
+
         std::string service =
             getService(*dbus, postCodesIntf, postCodesObjPath);
         // call POST Code Service method
