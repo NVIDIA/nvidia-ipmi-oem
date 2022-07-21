@@ -6,31 +6,34 @@
 
 #include "oemcommands.hpp"
 
+#include "biosversionutils.hpp"
 #include "dgx-a100-config.hpp"
 
-#include "biosversionutils.hpp"
+#include <bits/stdc++.h>
+#include <fcntl.h>
+#include <linux/i2c-dev.h>
+#include <linux/i2c.h>
+#include <security/pam_appl.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
-#include <ipmid/api.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/process/child.hpp>
 #include <ipmid/api-types.hpp>
+#include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
 #include <phosphor-logging/elog-errors.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/bus.hpp>
-#include <string>
-#include <vector>
-#include <array>
-#include <tuple>
-#include <filesystem>
-#include <linux/i2c.h>
-#include <linux/i2c-dev.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <bits/stdc++.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/process/child.hpp>
-#include <xyz/openbmc_project/Software/Version/server.hpp>
 #include <xyz/openbmc_project/Software/Activation/server.hpp>
+#include <xyz/openbmc_project/Software/Version/server.hpp>
+
+#include <algorithm>
+#include <array>
+#include <filesystem>
+#include <string>
+#include <tuple>
+#include <vector>
 
 // Network object in dbus
 const char* networkService = "xyz.openbmc_project.Network";
@@ -100,6 +103,49 @@ const static constexpr char* postCodesProp = "CurrentBootCycleCount";
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
 static constexpr uint8_t OEM_MINOR_VER = 0x00;
 
+// IPMI OEM USB Linux Gadget info
+static constexpr uint16_t USB_VENDOR_ID = 0x0525;
+static constexpr uint16_t USB_PRODUCT_ID = 0xA4A2;
+static constexpr uint8_t USB_SERIAL_NUM = 0x00;
+
+// Network object in dbus
+static constexpr auto networkServiceName = "xyz.openbmc_project.Network";
+static constexpr auto networkConfigObj = "/xyz/openbmc_project/network/config";
+static constexpr auto networkConfigIntf =
+    "xyz.openbmc_project.Network.SystemConfiguration";
+
+// IPMI channel info
+static constexpr uint8_t maxIpmiChannels = 16;
+static constexpr const char* channelConfigDefaultFilename =
+    "/usr/share/ipmi-providers/channel_config.json";
+
+// STRING DEFINES: Should sync with key's in JSON
+static constexpr const char* nameString = "name";
+static constexpr const char* isValidString = "is_valid";
+static constexpr const char* channelInfoString = "channel_info";
+static constexpr const char* mediumTypeString = "medium_type";
+static constexpr const char* protocolTypeString = "protocol_type";
+static constexpr const char* sessionSupportedString = "session_supported";
+static constexpr const char* isIpmiString = "is_ipmi";
+static constexpr const char* redfishHostInterfaceChannel = "usb0";
+
+// User Manager object in dbus
+static constexpr const char* userMgrObjBasePath = "/xyz/openbmc_project/user";
+static constexpr const char* userMgrInterface =
+    "xyz.openbmc_project.User.Manager";
+static constexpr const char* usersInterface =
+    "xyz.openbmc_project.User.Attributes";
+static constexpr const char* usersDeleteIface =
+    "xyz.openbmc_project.Object.Delete";
+static constexpr const char* createUserMethod = "CreateUser";
+static constexpr const char* deleteUserMethod = "Delete";
+
+// BIOSConfig Manager object in dbus
+static constexpr const char* biosConfigMgrPath =
+    "/xyz/openbmc_project/bios_config/manager";
+static constexpr const char* biosConfigMgrIface =
+    "xyz.openbmc_project.BIOSConfig.Manager";
+
 void registerNvOemFunctions() __attribute__((constructor));
 
 using namespace phosphor::logging;
@@ -107,6 +153,7 @@ using namespace phosphor::logging;
 using GetSubTreeType = std::vector<
     std::pair<std::string,
         std::vector<std::pair<std::string, std::vector<std::string>>>>>;
+using GetSubTreePathsType = std::vector<std::string>;
 using BasicVariantType = std::variant<std::string>;
 using PropertyMapType =
     boost::container::flat_map<std::string, BasicVariantType>;
@@ -2614,6 +2661,432 @@ ipmi::RspType<> ipmiBiosSetConfig(uint8_t type) {
     return ipmi::responseSuccess();
 }
 
+ipmi::RspType<uint8_t, uint8_t> ipmiGetUsbDescription(uint8_t type)
+{
+    uint8_t msbId;
+    uint8_t lsbId;
+    if (type == 0x01)
+    {
+        // Get the USB Vendor Id
+        msbId = (uint8_t)((USB_VENDOR_ID >> 8) & 0xff);
+        lsbId = (uint8_t)(USB_VENDOR_ID & 0xff);
+        return ipmi::responseSuccess(msbId, lsbId);
+    }
+    else if (type == 0x02)
+    {
+        // Get the USB Product Id
+        msbId = (uint8_t)((USB_PRODUCT_ID >> 8) & 0xff);
+        lsbId = (uint8_t)(USB_PRODUCT_ID & 0xff);
+        return ipmi::responseSuccess(msbId, lsbId);
+    }
+    else
+    {
+        return ipmi::responseInvalidFieldRequest();
+    }
+}
+
+ipmi::RspType<std::vector<uint8_t>> ipmiGetUsbSerialNum()
+{
+    // Get the USB Serial Number
+    std::vector<uint8_t> usbSerialNum;
+    usbSerialNum.push_back(USB_SERIAL_NUM);
+    return ipmi::responseSuccess(usbSerialNum);
+}
+
+ipmi::RspType<std::vector<uint8_t>> ipmiGetRedfishHostName()
+{
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        auto service =
+            ipmi::getService(*dbus, networkConfigIntf, networkConfigObj);
+        auto hostname = ipmi::getDbusProperty(*dbus, service, networkConfigObj,
+                                              networkConfigIntf, "HostName");
+        std::vector<uint8_t> respHostNameBuf;
+        std::copy(std::get<std::string>(hostname).begin(),
+                  std::get<std::string>(hostname).end(),
+                  std::back_inserter(respHostNameBuf));
+        return ipmi::responseSuccess(respHostNameBuf);
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get HostName",
+                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+}
+
+ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
+{
+    std::ifstream jsonFile(channelConfigDefaultFilename);
+    if (!jsonFile.good())
+    {
+        log<level::INFO>("JSON file not found",
+                         entry("FILE_NAME=%s", channelConfigDefaultFilename));
+        return ipmi::responseResponseError();
+    }
+
+    nlohmann::json data = nullptr;
+    try
+    {
+        data = nlohmann::json::parse(jsonFile, nullptr, false);
+    }
+    catch (const nlohmann::json::parse_error& e)
+    {
+        log<level::DEBUG>("Corrupted channel config.",
+                          entry("MSG=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+
+    bool chFound = false;
+    uint8_t chNum;
+    for (chNum = 0; chNum < maxIpmiChannels; chNum++)
+    {
+        try
+        {
+            std::string chKey = std::to_string(chNum);
+            nlohmann::json jsonChData = data[chKey].get<nlohmann::json>();
+            if (jsonChData.is_null() ||
+                (jsonChData[nameString].get<std::string>() !=
+                 redfishHostInterfaceChannel))
+            {
+                log<level::WARNING>(
+                    "Channel not configured for Redfish Host Interface",
+                    entry("CHANNEL_NUM=%d", chNum));
+                continue;
+            }
+            nlohmann::json jsonChInfo =
+                jsonChData[channelInfoString].get<nlohmann::json>();
+            if (jsonChInfo.is_null())
+            {
+                log<level::ERR>("Invalid/corrupted channel config file");
+                return ipmi::responseResponseError();
+            }
+
+            if ((jsonChData[isValidString].get<bool>() == true) &&
+                (jsonChInfo[mediumTypeString].get<std::string>() ==
+                 "lan-802.3") &&
+                (jsonChInfo[protocolTypeString].get<std::string>() ==
+                 "ipmb-1.0") &&
+                (jsonChInfo[sessionSupportedString].get<std::string>() ==
+                 "multi-session") &&
+                (jsonChInfo[isIpmiString].get<bool>() == true))
+            {
+                chFound = true;
+                break;
+            }
+        }
+        catch (const nlohmann::json::parse_error& e)
+        {
+            log<level::DEBUG>("Json Exception caught.",
+                              entry("MSG=%s", e.what()));
+            return ipmi::responseResponseError();
+        }
+    }
+    jsonFile.close();
+    if (chFound)
+    {
+        return ipmi::responseSuccess(chNum);
+    }
+    return ipmi::responseInvalidCommandOnLun();
+}
+
+static bool getCredentialBootStrap()
+{
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        auto biosService =
+            ipmi::getService(*dbus, biosConfigMgrIface, biosConfigMgrPath);
+        auto credentialBootStrap =
+            ipmi::getDbusProperty(*dbus, biosService, biosConfigMgrPath,
+                                  biosConfigMgrIface, "CredentialBootstrap");
+
+        return std::get<bool>(credentialBootStrap);
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get CredentialBootstrap status",
+                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return false;
+    }
+}
+
+static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
+{
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    auto biosService =
+        ipmi::getService(*dbus, biosConfigMgrIface, biosConfigMgrPath);
+    // if disable crendential BootStrap status is 0xa5,
+    // then Keep credential bootstrapping enabled
+    if (disableCredBootStrap == 0xa5)
+    {
+        ipmi::setDbusProperty(*dbus, biosService, biosConfigMgrPath,
+                              biosConfigMgrIface, "CredentialBootstrap",
+                              bool(true));
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "property set to true");
+    }
+    else
+    {
+        ipmi::setDbusProperty(*dbus, biosService, biosConfigMgrPath,
+                              biosConfigMgrIface, "CredentialBootstrap",
+                              bool(false));
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "property set to false");
+    }
+}
+
+static int pamFunctionConversation(int numMsg, const struct pam_message** msg,
+                                   struct pam_response** resp, void* appdataPtr)
+{
+    if (appdataPtr == nullptr)
+    {
+        return PAM_CONV_ERR;
+    }
+    if (numMsg <= 0 || numMsg >= PAM_MAX_NUM_MSG)
+    {
+        return PAM_CONV_ERR;
+    }
+
+    for (int i = 0; i < numMsg; ++i)
+    {
+        /* Ignore all PAM messages except prompting for hidden input */
+        if (msg[i]->msg_style != PAM_PROMPT_ECHO_OFF)
+        {
+            continue;
+        }
+
+        /* Assume PAM is only prompting for the password as hidden input */
+        /* Allocate memory only when PAM_PROMPT_ECHO_OFF is encounterred */
+        char* appPass = reinterpret_cast<char*>(appdataPtr);
+        size_t appPassSize = std::strlen(appPass);
+        if (appPassSize >= PAM_MAX_RESP_SIZE)
+        {
+            return PAM_CONV_ERR;
+        }
+
+        char* pass = reinterpret_cast<char*>(malloc(appPassSize + 1));
+        if (pass == nullptr)
+        {
+            return PAM_BUF_ERR;
+        }
+
+        void* ptr =
+            calloc(static_cast<size_t>(numMsg), sizeof(struct pam_response));
+        if (ptr == nullptr)
+        {
+            free(pass);
+            return PAM_BUF_ERR;
+        }
+
+        std::strncpy(pass, appPass, appPassSize + 1);
+        *resp = reinterpret_cast<pam_response*>(ptr);
+        resp[i]->resp = pass;
+        return PAM_SUCCESS;
+    }
+    return PAM_CONV_ERR;
+}
+
+int pamUpdatePasswd(const char* username, const char* password)
+{
+    const struct pam_conv localConversation = {pamFunctionConversation,
+                                               const_cast<char*>(password)};
+    pam_handle_t* localAuthHandle = NULL; // this gets set by pam_start
+    int retval =
+        pam_start("passwd", username, &localConversation, &localAuthHandle);
+    if (retval != PAM_SUCCESS)
+    {
+        return retval;
+    }
+
+    retval = pam_chauthtok(localAuthHandle, PAM_SILENT);
+    if (retval != PAM_SUCCESS)
+    {
+        pam_end(localAuthHandle, retval);
+        return retval;
+    }
+    return pam_end(localAuthHandle, PAM_SUCCESS);
+}
+
+bool isValidUserName(ipmi::Context::ptr ctx, const std::string& userName)
+{
+    if (userName.empty())
+    {
+        phosphor::logging::log<level::ERR>("Requested empty UserName string");
+        return false;
+    }
+    if (!std::regex_match(userName.c_str(),
+                          std::regex("[a-zA-z_][a-zA-Z_0-9]*")))
+    {
+        phosphor::logging::log<level::ERR>("Unsupported characters in string");
+        return false;
+    }
+
+    boost::system::error_code ec;
+    GetSubTreePathsType subtreePaths =
+        ctx->bus->yield_method_call<GetSubTreePathsType>(
+            ctx->yield, ec, "xyz.openbmc_project.ObjectMapper",
+            "/xyz/openbmc_project/object_mapper",
+            "xyz.openbmc_project.ObjectMapper", "GetSubTreePaths",
+            userMgrObjBasePath, 0, std::array<const char*, 1>{usersInterface});
+    if (ec)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBootStrapAccount: Failed to get User Paths");
+        return false;
+    }
+
+    if (subtreePaths.empty())
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBootStrapAccount: empty subtreepaths");
+        return false;
+    }
+
+    for (const auto& objectPath : subtreePaths)
+    {
+        if (objectPath.find(userName) != std::string::npos)
+        {
+            log<level::ERR>(
+                "User name already exists",
+                phosphor::logging::entry("UserName= %s", userName.c_str()));
+            return false;
+        }
+    }
+    return true;
+}
+
+bool getAlphaNumString(std::string& uniqueStr)
+{
+    std::ifstream randFp("/dev/urandom", std::ifstream::in);
+    char byte;
+    uint8_t maxStrSize = 16;
+
+    if (!randFp.is_open())
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBootStrapAccount: Failed to open urandom file");
+        return false;
+    }
+
+    for (uint8_t it = 0; it < maxStrSize; it++)
+    {
+        while (1)
+        {
+            if (randFp.get(byte))
+            {
+                if (iswalnum(byte))
+                {
+                    break;
+                }
+            }
+        }
+        uniqueStr.push_back(byte);
+    }
+    randFp.close();
+    return true;
+}
+
+ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
+    ipmiGetBootStrapAccount(ipmi::Context::ptr ctx,
+                            uint8_t disableCredBootStrap)
+{
+    try
+    {
+        // Check the CredentialBootstrapping property status,
+        // if disabled, then reject the command with success code.
+        bool isCredentialBooStrapSet = getCredentialBootStrap();
+        if (!isCredentialBooStrapSet)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiGetBootStrapAccount: Credential BootStrapping Disabled "
+                "Get BootStrap Account command rejected.");
+            return ipmi::responseSuccess();
+        }
+
+        std::string userName;
+        std::string password;
+
+        bool ret = getAlphaNumString(userName);
+        if (!ret)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiGetBootStrapAccount: Failed to generate alphanumeric "
+                "UserName");
+            return ipmi::responseResponseError();
+        }
+        if (!isValidUserName(ctx, userName))
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiGetBootStrapAccount: Failed to generate valid UserName");
+            return ipmi::responseResponseError();
+        }
+
+        ret = getAlphaNumString(password);
+        if (!ret)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiGetBootStrapAccount: Failed to generate alphanumeric "
+                "Password");
+            return ipmi::responseResponseError();
+        }
+
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        std::string service =
+            getService(*dbus, userMgrInterface, userMgrObjBasePath);
+
+        // create the new user with only redfish-hostiface group access
+        auto method = dbus->new_method_call(service.c_str(), userMgrObjBasePath,
+                                            userMgrInterface, createUserMethod);
+        method.append(userName, std::vector<std::string>{"redfish-hostiface"},
+                      "priv-admin", true);
+        auto reply = dbus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error returns from call to dbus. BootStrap Failed");
+            return ipmi::responseResponseError();
+        }
+
+        // update the password
+        boost::system::error_code ec;
+        int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
+        if (retval != PAM_SUCCESS)
+        {
+            dbus->yield_method_call<void>(ctx->yield, ec, service.c_str(),
+                                          userMgrObjBasePath + userName,
+                                          usersDeleteIface, "Delete");
+
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiGetBootStrapAccount : Failed to update password.");
+            return ipmi::responseUnspecifiedError();
+        }
+        else
+        {
+            // update the "CredentialBootstrap" Dbus property w.r.to
+            // disable crendential BootStrap status
+            setCredentialBootStrap(disableCredBootStrap);
+
+            std::vector<uint8_t> respUserNameBuf, respPasswordBuf;
+            std::copy(userName.begin(), userName.end(),
+                      std::back_inserter(respUserNameBuf));
+            std::copy(password.begin(), password.end(),
+                      std::back_inserter(respPasswordBuf));
+            return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiGetBootStrapAccount : Failed to generate BootStrap Account "
+            "Credentials");
+        return ipmi::responseResponseError();
+    }
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -3008,5 +3481,51 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetBiosConfig,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosSetConfig);
+
+    // <Get USB Description>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetUsbDescription));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetUsbDescription,
+                          ipmi::Privilege::Admin, ipmi::ipmiGetUsbDescription);
+
+    // <Get Virtual USB Serial Number>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetUsbSerialNum));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetUsbSerialNum,
+                          ipmi::Privilege::Admin, ipmi::ipmiGetUsbSerialNum);
+
+    // <Get Redfish Service Hostname>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetRedfishHostName));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetRedfishHostName,
+                          ipmi::Privilege::Admin, ipmi::ipmiGetRedfishHostName);
+
+    // <Get IPMI Channel Number of Redfish HostInterface>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetipmiChannelRfHi));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetipmiChannelRfHi,
+                          ipmi::Privilege::Admin, ipmi::ipmiGetipmiChannelRfHi);
+
+    // <Get Bootstrap Account Credentials>
+    log<level::NOTICE>(
+        "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBootStrapAcc));
+
+    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
+                               ipmi::nvidia::misc::cmdGetBootStrapAcc,
+                               ipmi::Privilege::sysIface,
+                               ipmi::ipmiGetBootStrapAccount);
     return;
 }

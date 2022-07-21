@@ -15,6 +15,7 @@ namespace nvidia
 constexpr auto netFnOemGlobal = 0x32;
 constexpr auto netFnOemNV = 0x3C;
 constexpr auto netFnOemPost = 0x30;
+constexpr auto netGroupExt = 0x52;
 
 namespace app
 {
@@ -64,6 +65,11 @@ constexpr auto cmdGetBiosNextImage = 0x22;
 constexpr auto cmdSetBiosNextImage = 0x23;
 constexpr auto cmdGetBiosVerions = 0x24;
 constexpr auto cmdSetBiosConfig = 0x25;
+constexpr auto cmdGetUsbDescription = 0x30;
+constexpr auto cmdGetUsbSerialNum = 0x31;
+constexpr auto cmdGetRedfishHostName = 0x32;
+constexpr auto cmdGetipmiChannelRfHi = 0x33;
+constexpr auto cmdGetBootStrapAcc = 0x02;
 
 constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
 constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;
