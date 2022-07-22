@@ -15,6 +15,9 @@ option (USE_ETH1_NETWORK_DEVICE
          instead of using default 'eth0' device"
         OFF)
 
+option (sbmr-boot-progress
+        "To Support Boot Progreess codes for ARM systems"
+        OFF)
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -59,7 +62,7 @@ add_custom_command(OUTPUT include/ipmi-whitelist.hpp
 
 add_library (znvipmioemcmds
              SHARED src/oemcommands.cpp src/sensorcommands.cpp
-             src/storagecommands.cpp
+             src/storagecommands.cpp src/sbmr-bootprogress.cpp
              )
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (znvipmioemcmds PROPERTIES SOVERSION "0")
@@ -92,3 +95,8 @@ target_compile_definitions (
     -DUSING_OEM_SENSOR>
 )
 
+target_compile_definitions (
+    znvipmioemcmds PRIVATE
+    $<$<BOOL:${sbmr-boot-progress}>:
+    -DFEATURE_SBMR_BOOTPROGRESS>
+)
