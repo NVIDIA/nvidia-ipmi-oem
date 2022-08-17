@@ -16,7 +16,7 @@ namespace nvidia
 /* PSU Information */
 constexpr auto psuNumber = 6;
 constexpr uint8_t psuAddr[psuNumber] = {0x40, 0x41, 0x42, 0x40, 0x41, 0x42};
-constexpr uint8_t psuBus[psuNumber]  = {215, 216, 217, 218, 219, 220};
+constexpr uint8_t psuBus[psuNumber]  = {215, 216, 217, 219, 220,221};
 
 constexpr auto psuRegSerialNumber       = 0x9e;
 constexpr auto psuRegSerialNumberLen    = 0x0D;
