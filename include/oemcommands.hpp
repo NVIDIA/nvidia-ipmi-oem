@@ -70,6 +70,8 @@ constexpr auto cmdGetUsbSerialNum = 0x31;
 constexpr auto cmdGetRedfishHostName = 0x32;
 constexpr auto cmdGetipmiChannelRfHi = 0x33;
 constexpr auto cmdGetBootStrapAcc = 0x02;
+constexpr auto cmdGetMaxPMaxQConfiguration = 0x90;
+constexpr auto cmdSetMaxPMaxQConfiguration = 0x91;
 
 constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
 constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;
@@ -118,6 +120,27 @@ constexpr auto getLedStatusMotherBoardLed = 0x10;
 
 constexpr auto biosConfigTypeNetwork = 0x01;
 constexpr auto biosConfigTypeRedFish = 0x02;
+
+constexpr auto getMaxPMaxQConfigurationMode = 0x00;
+constexpr auto getMaxPMaxQConfigurationCurrentPowerLimit = 0x01;
+constexpr auto getMaxPMaxQConfigurationCurrentPowerLimitP = 0x02;
+constexpr auto getMaxPMaxQConfigurationCurrentPowerLimitQ = 0x03;
+constexpr auto getMaxPMaxQConfigurationCurrentPowerLimitMax = 0x04;
+constexpr auto getMaxPMaxQConfigurationCurrentPowerLimitMin = 0x05;
+constexpr auto getMaxPMaxQConfigurationRestOfSytemPower = 0x06;
+
+constexpr auto setMaxPMaxQConfigurationMode = 0x00;
+constexpr auto setMaxPMaxQConfigurationCurrentPowerLimit = 0x01;
+
+constexpr auto staticMode = 0x01;
+constexpr auto maximumPerformanceMode = 0x01;
+constexpr auto powerSavingMode = 0x02;
+constexpr auto OemMode = 0x03;
+
+constexpr uint8_t getMaskdata(int data, int position)
+{
+    return (data >> position * 8) & 0xff;
+}
 
 } // namespace misc
 

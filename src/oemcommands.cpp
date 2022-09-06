@@ -67,6 +67,23 @@ static constexpr const char* gpuSMBPBIPath = "/xyz/openbmc_project/GpuMgr";
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
 const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
 
+// Powermanager in dbus
+const char* powerManagerCurrentChassisLimitObj =
+    "/xyz/openbmc_project/control/power/CurrentChassisLimit";
+const char* powerManagerCurrentChassisModeIntf =
+    "xyz.openbmc_project.Control.Power.Mode";
+const char* powerManagerCurrentChassisCapIntf =
+    "xyz.openbmc_project.Control.Power.Cap";
+const char* powerManagerChassisLimitPObj =
+    "/xyz/openbmc_project/control/power/ChassisLimitP";
+const char* powerManagerChassisLimitQObj =
+    "/xyz/openbmc_project/control/power/ChassisLimitQ";
+const char* powerManagerRestOfSystemPowerObj =
+    "/xyz/openbmc_project/control/power/RestOfSystemPower";
+const char* powerManagerRestOfSystemPowerIntf =
+    "xyz.openbmc_project.Sensor.Value";
+const char* powerManagerService = "com.Nvidia.Powermanager";
+
 // BMC time object in dbus
 const char* timeObj = "/xyz/openbmc_project/time/sync_method";
 const char* timeIntf = "xyz.openbmc_project.Time.Synchronization";
@@ -3087,6 +3104,255 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     }
 }
 
+ipmi::RspType<uint8_t, std::vector<uint8_t>>
+    ipmiOemGetMaxPMaxQConfiguration(uint8_t parameter)
+{
+    using namespace ipmi::nvidia::misc;
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        switch (parameter)
+        {
+            case getMaxPMaxQConfigurationMode: // Mode
+            {
+
+                auto mode = ipmi::getDbusProperty(
+                    *dbus, powerManagerService,
+                    powerManagerCurrentChassisLimitObj,
+                    powerManagerCurrentChassisModeIntf, "PowerMode");
+                if (std::get<std::string>(mode) ==
+                    "xyz.openbmc_project.Control.Power.Mode.PowerMode."
+                    "Static")
+                {
+                    std::vector<uint8_t> returndataOut(1);
+                    returndataOut[0] = staticMode;
+                    return ipmi::responseSuccess(ipmi::ccSuccess,
+                                                 returndataOut);
+                }
+                else if (std::get<std::string>(mode) ==
+                         "xyz.openbmc_project.Control.Power.Mode.PowerMode."
+                         "PowerSaving")
+                {
+                    std::vector<uint8_t> returndataOut(1);
+                    returndataOut[0] = powerSavingMode;
+                    return ipmi::responseSuccess(ipmi::ccSuccess,
+                                                 returndataOut);
+                }
+                else if (std::get<std::string>(mode) ==
+                         "xyz.openbmc_project.Control.Power.Mode.PowerMode."
+                         "MaximumPerformance")
+                {
+                    std::vector<uint8_t> returndataOut(1);
+                    returndataOut[0] = maximumPerformanceMode;
+                    return ipmi::responseSuccess(ipmi::ccSuccess,
+                                                 returndataOut);
+                }
+                else if (std::get<std::string>(mode) ==
+                         "xyz.openbmc_project.Control.Power.Mode.PowerMode."
+                         "OEM")
+                {
+                    std::vector<uint8_t> returndataOut(1);
+                    returndataOut[0] = OemMode;
+                    return ipmi::responseSuccess(ipmi::ccSuccess,
+                                                 returndataOut);
+                }
+                else
+                {
+                    return ipmi::responseResponseError();
+                }
+            }
+            break;
+            case getMaxPMaxQConfigurationCurrentPowerLimit: // currentPowerLimit
+            {
+                auto value = ipmi::getDbusProperty(
+                    *dbus, powerManagerService,
+                    powerManagerCurrentChassisLimitObj,
+                    powerManagerCurrentChassisCapIntf, "PowerCap");
+                uint32_t data = std::get<uint32_t>(value);
+                std::vector<uint8_t> returndataOut(4);
+                returndataOut[0] = getMaskdata(data, 0);
+                returndataOut[1] = getMaskdata(data, 1);
+                returndataOut[2] = getMaskdata(data, 2);
+                returndataOut[3] = getMaskdata(data, 3);
+                return ipmi::responseSuccess(ipmi::ccSuccess, returndataOut);
+            }
+            break;
+            case getMaxPMaxQConfigurationCurrentPowerLimitP: // chassisPowerLimit_P
+            {
+                auto value = ipmi::getDbusProperty(
+                    *dbus, powerManagerService, powerManagerChassisLimitPObj,
+                    powerManagerCurrentChassisCapIntf, "MaxPowerCapValue");
+                uint32_t data = std::get<uint32_t>(value);
+                std::vector<uint8_t> returndataOut(4);
+                returndataOut[0] = getMaskdata(data, 0);
+                returndataOut[1] = getMaskdata(data, 1);
+                returndataOut[2] = getMaskdata(data, 2);
+                returndataOut[3] = getMaskdata(data, 3);
+                return ipmi::responseSuccess(ipmi::ccSuccess, returndataOut);
+            }
+            break;
+            case getMaxPMaxQConfigurationCurrentPowerLimitQ: // chassisPowerLimit_Q
+            {
+                auto value = ipmi::getDbusProperty(
+                    *dbus, powerManagerService, powerManagerChassisLimitQObj,
+                    powerManagerCurrentChassisCapIntf, "MaxPowerCapValue");
+                uint32_t data = std::get<uint32_t>(value);
+                std::vector<uint8_t> returndataOut(4);
+                returndataOut[0] = getMaskdata(data, 0);
+                returndataOut[1] = getMaskdata(data, 1);
+                returndataOut[2] = getMaskdata(data, 2);
+                returndataOut[3] = getMaskdata(data, 3);
+                return ipmi::responseSuccess(ipmi::ccSuccess, returndataOut);
+            }
+            break;
+            case getMaxPMaxQConfigurationCurrentPowerLimitMax: // chassisPowerLimit_Max
+            {
+                auto value = ipmi::getDbusProperty(
+                    *dbus, powerManagerService,
+                    powerManagerCurrentChassisLimitObj,
+                    powerManagerCurrentChassisCapIntf, "MinPowerCapValue");
+                uint32_t data = std::get<uint32_t>(value);
+                std::vector<uint8_t> returndataOut(4);
+                returndataOut[0] = getMaskdata(data, 0);
+                returndataOut[1] = getMaskdata(data, 1);
+                returndataOut[2] = getMaskdata(data, 2);
+                returndataOut[3] = getMaskdata(data, 3);
+                return ipmi::responseSuccess(ipmi::ccSuccess, returndataOut);
+            }
+            break;
+            case getMaxPMaxQConfigurationCurrentPowerLimitMin: // chassisPowerLimit_Max
+            {
+                auto value = ipmi::getDbusProperty(
+                    *dbus, powerManagerService,
+                    powerManagerCurrentChassisLimitObj,
+                    powerManagerCurrentChassisCapIntf, "MaxPowerCapValue");
+                uint32_t data = std::get<uint32_t>(value);
+                std::vector<uint8_t> returndataOut(4);
+                returndataOut[0] = getMaskdata(data, 0);
+                returndataOut[1] = getMaskdata(data, 1);
+                returndataOut[2] = getMaskdata(data, 2);
+                returndataOut[3] = getMaskdata(data, 3);
+                return ipmi::responseSuccess(ipmi::ccSuccess, returndataOut);
+            }
+            break;
+            case getMaxPMaxQConfigurationRestOfSytemPower: // RestOfSystemPower
+            {
+                auto value = ipmi::getDbusProperty(
+                    *dbus, powerManagerService,
+                    powerManagerRestOfSystemPowerObj,
+                    powerManagerRestOfSystemPowerIntf, "Value");
+                uint32_t data = std::get<uint32_t>(value);
+                std::vector<uint8_t> returndataOut(4);
+                returndataOut[0] = getMaskdata(data, 0);
+                returndataOut[1] = getMaskdata(data, 1);
+                returndataOut[2] = getMaskdata(data, 2);
+                returndataOut[3] = getMaskdata(data, 3);
+                return ipmi::responseSuccess(ipmi::ccSuccess, returndataOut);
+            }
+            break;
+            default:
+                return ipmi::response(ipmi::ccInvalidFieldRequest);
+        }
+        return ipmi::responseSuccess();
+    }
+    catch (std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to  Get ipmiOemGetMaxPMaxQConfiguration",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+}
+
+ipmi::RspType<uint8_t>
+    ipmiOemSetMaxPMaxQConfiguration(uint8_t parameter,
+                                    std::vector<uint8_t> dataIn)
+{
+    using namespace ipmi::nvidia::misc;
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        switch (parameter)
+        {
+            case setMaxPMaxQConfigurationMode: // Set Mode
+            {
+                if (dataIn.size() != 1)
+                {
+                    return ipmi::response(ipmi::ccReqDataLenInvalid);
+                }
+
+                switch (dataIn[0])
+                {
+                    case maximumPerformanceMode:
+                        ipmi::setDbusProperty(
+                            *dbus, powerManagerService,
+                            powerManagerCurrentChassisLimitObj,
+                            powerManagerCurrentChassisModeIntf, "PowerMode",
+                            std::string("xyz.openbmc_project.Control.Power."
+                                        "Mode.PowerMode.MaximumPerformance"));
+                        break;
+                    case powerSavingMode:
+                        ipmi::setDbusProperty(
+                            *dbus, powerManagerService,
+                            powerManagerCurrentChassisLimitObj,
+                            powerManagerCurrentChassisModeIntf, "PowerMode",
+                            std::string("xyz.openbmc_project.Control.Power."
+                                        "Mode.PowerMode.PowerSaving"));
+                        break;
+                    case OemMode:
+                        ipmi::setDbusProperty(
+                            *dbus, powerManagerService,
+                            powerManagerCurrentChassisLimitObj,
+                            powerManagerCurrentChassisModeIntf, "PowerMode",
+                            std::string("xyz.openbmc_project.Control.Power."
+                                        "Mode.PowerMode.OEM"));
+                        break;
+                    default:
+                        return ipmi::response(ipmi::ccInvalidFieldRequest);
+                }
+            }
+            break;
+            case setMaxPMaxQConfigurationCurrentPowerLimit: // set sPowerCap
+                                                            // Value
+            {
+                if (dataIn.size() != 4)
+                {
+                    return ipmi::response(ipmi::ccReqDataLenInvalid);
+                }
+                uint32_t value = dataIn[3] << 24 | dataIn[2] << 16 |
+                                 dataIn[1] << 8 | dataIn[0];
+                ipmi::setDbusProperty(*dbus, powerManagerService,
+                                      powerManagerCurrentChassisLimitObj,
+                                      powerManagerCurrentChassisCapIntf,
+                                      "PowerCap", value);
+            }
+            break;
+
+            default:
+                return ipmi::response(ipmi::ccInvalidFieldRequest);
+        }
+        return ipmi::responseSuccess();
+    }
+    catch (sdbusplus::exception_t& e)
+    {
+        std::string error = e.name();
+        if (error == "xyz.openbmc_project.Control.Power.Cap.Error."
+                     "NotSupportedInCurrentMode")
+        {
+            return ipmi::response(ipmi::ccCommandNotAvailable);
+        }
+        else if (error == "xyz.openbmc_project.Control.Power.Cap.Error."
+                          "chassisLimitOutOfRange")
+        {
+            return ipmi::response(ipmi::ccParmOutOfRange);
+        }
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to  Get ipmiOemSetMaxPMaxQConfiguration",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseResponseError();
+    }
+}
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -3527,5 +3793,25 @@ void registerNvOemFunctions()
                                ipmi::nvidia::misc::cmdGetBootStrapAcc,
                                ipmi::Privilege::sysIface,
                                ipmi::ipmiGetBootStrapAccount);
+
+    // <Get Maxp/MaxQ Configuration>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetMaxPMaxQConfiguration));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetMaxPMaxQConfiguration,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiOemGetMaxPMaxQConfiguration);
+
+    // <Set Maxp/MaxQ Configuration>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetMaxPMaxQConfiguration));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSetMaxPMaxQConfiguration,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiOemSetMaxPMaxQConfiguration);
     return;
 }
