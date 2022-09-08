@@ -1661,9 +1661,12 @@ static int getBIOSbootCycCount(uint16_t& BootCycCount)
 ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
     ipmiGetBiosPostCode(ipmi::Context::ptr ctx)
 {
+    using namespace ipmi::nvidia::app;
     uint64_t pcode = 0;
     uint16_t bootIndex = 1; // 1 for the latest boot cycle's POST Code
     uint16_t postVecLen = 0;
+    uint16_t postVecStart = 0;
+    uint16_t postRetLen = 0;
     using postcode_t = std::tuple<uint64_t, std::vector<uint8_t>>;
     postcode_t postCodeTup (0, {0});
     std::vector<postcode_t> postCodeVector = {};
@@ -1699,7 +1702,16 @@ ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
         }
 
         postVecLen = postCodeVector.size();
-        for (int i = 0; i < postVecLen; i++)
+
+        if (postVecLen <= cmdGetBiosPostCodeToIpmiMaxSize)
+            postVecStart = 0;
+        else
+        {
+            // adjust the start position so the end-portion of post code is sent
+            postVecStart = postVecLen - cmdGetBiosPostCodeToIpmiMaxSize;
+        }
+
+        for (int i = postVecStart; i < postVecLen; i++)
         {
             postCodeTup = postCodeVector[i];
             pcode = std::get<0>(postCodeTup);
@@ -1707,7 +1719,8 @@ ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
             //sd_journal_print(LOG_ERR, "0x%02llx ", pcode);
         }
 
-        return ipmi::responseSuccess(bootIndex, postVecLen, postCodeVectorRet);
+        postRetLen = postCodeVectorRet.size();
+        return ipmi::responseSuccess(bootIndex, postRetLen, postCodeVectorRet);
     }
     catch (const std::exception& e)
     {
