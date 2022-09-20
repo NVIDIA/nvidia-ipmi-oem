@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
 #include <security/pam_appl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -163,6 +165,12 @@ static constexpr const char* biosConfigMgrPath =
 static constexpr const char* biosConfigMgrIface =
     "xyz.openbmc_project.BIOSConfig.Manager";
 
+// Cert Paths
+std::string defaultCertPath = "/etc/ssl/certs/https/server.pem";
+
+static constexpr const char* persistentDataFilePath =
+    "/home/root/bmcweb_persistent_data.json";
+
 void registerNvOemFunctions() __attribute__((constructor));
 
 using namespace phosphor::logging;
@@ -179,6 +187,10 @@ namespace ipmi
 {
 // BIOS PostCode return error code
 static constexpr Cc ipmiCCBIOSPostCodeError = 0x89;
+
+// HI Certificate FingerPrint error code
+static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
+static constexpr Cc ipmiCCCertificateNumberInvalid = 0xCB;
 
 static std::tuple <int, std::string>
     execBusctlCmd(std::string cmd)
@@ -2821,6 +2833,127 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
     return ipmi::responseInvalidCommandOnLun();
 }
 
+bool getRfUuid(std::string& rfUuid)
+{
+    std::ifstream persistentDataFilePath(
+        "/home/root/bmcweb_persistent_data.json");
+    if (persistentDataFilePath.is_open())
+    {
+        auto data =
+            nlohmann::json::parse(persistentDataFilePath, nullptr, false);
+        if (data.is_discarded())
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiGetRedfishServiceUuid: Error parsing persistent data in "
+                "json file.");
+            return false;
+        }
+        else
+        {
+            for (const auto& item : data.items())
+            {
+                if (item.key() == "system_uuid")
+                {
+                    const std::string* jSystemUuid =
+                        item.value().get_ptr<const std::string*>();
+                    if (jSystemUuid != nullptr)
+                    {
+                        rfUuid = *jSystemUuid;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+ipmi::RspType<std::vector<uint8_t>> ipmiGetRedfishServiceUuid()
+{
+    std::string rfUuid;
+    bool ret = getRfUuid(rfUuid);
+    if (!ret)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetRedfishServiceUuid: Error reading Redfish Service UUID "
+            "File.");
+        return ipmi::responseResponseError();
+    }
+
+    // As per Redfish Host Interface Spec v1.3.0
+    // The Redfish UUID is 16byte and should be represented as below:
+    // Ex: {00112233-4455-6677-8899-AABBCCDDEEFF}
+    // 0x33 0x22 0x11 0x00 0x55 0x44 0x77 0x66 0x88 0x99 0xAA 0xBB 0xCC 0xDD
+    // 0xEE 0xFF
+
+    int start = 0;
+    int noOfBytes = 5;
+    int leftBytes = 3;
+    int totalBytes = 16;
+    std::string bytes;
+    std::string::size_type found = 0;
+    std::vector<uint8_t> resBuf;
+
+    for (int index = 0; index < noOfBytes; index++)
+    {
+        found = rfUuid.find('-', found + 1);
+        if (found == std::string::npos)
+        {
+            if (index != noOfBytes - 1)
+            {
+                break;
+            }
+        }
+
+        if (index == noOfBytes - 1)
+        {
+            bytes = rfUuid.substr(start);
+        }
+        else
+        {
+            bytes = rfUuid.substr(start, found - start);
+        }
+
+        if (index < leftBytes)
+        {
+            std::reverse(bytes.begin(), bytes.end());
+            for (int leftIndex = 0; leftIndex < bytes.length(); leftIndex += 2)
+            {
+                std::swap(bytes[leftIndex + 1], bytes[leftIndex]);
+                resBuf.push_back(
+                    std::stoi(bytes.substr(leftIndex, 2), nullptr, 16));
+            }
+        }
+        else
+        {
+            for (int rightIndex = 0; rightIndex < bytes.length();
+                 rightIndex += 2)
+            {
+                resBuf.push_back(
+                    std::stoi(bytes.substr(rightIndex, 2), nullptr, 16));
+            }
+        }
+        start = found + 1;
+    }
+
+    if (resBuf.size() != totalBytes)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetRedfishServiceUuid: Invalid Redfish Service UUID found.");
+        return ipmi::responseResponseError();
+    }
+    return ipmi::responseSuccess(resBuf);
+}
+
+ipmi::RspType<uint8_t, uint8_t> ipmiGetRedfishServicePort()
+{
+    // default Redfish Service Port Number is 443
+    int redfishPort = 443;
+    uint8_t lsb = redfishPort & 0xff;
+    uint8_t msb = redfishPort >> 8 & 0xff;
+    return ipmi::responseSuccess(msb, lsb);
+}
+
 static bool getCredentialBootStrap()
 {
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
@@ -3113,6 +3246,80 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmiGetBootStrapAccount : Failed to generate BootStrap Account "
             "Credentials");
+        return ipmi::responseResponseError();
+    }
+}
+
+ipmi::RspType<std::vector<uint8_t>>
+    ipmiGetManagerCertFingerPrint(ipmi::Context::ptr ctx, uint8_t certNum)
+{
+    unsigned int n;
+    const EVP_MD* fdig = EVP_sha256();
+    // Check the CredentialBootstrapping property status,
+    // if disabled, then reject the command with success code.
+    bool isCredentialBooStrapSet = getCredentialBootStrap();
+    if (!isCredentialBooStrapSet)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetManagerCertFingerPrint: Credential BootStrapping Disabled "
+            "Get Manager Certificate FingerPrint command rejected.");
+        return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
+    }
+
+    if (certNum != 1)
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetManagerCertFingerPrint: Invalid certificate number "
+            "Get Manager Certificate failed");
+        return ipmi::response(ipmi::ipmiCCCertificateNumberInvalid);
+    }
+    BIO* cert;
+    X509* x = NULL;
+    cert = BIO_new_file(defaultCertPath.c_str(), "rb");
+    if (cert == NULL)
+    {
+        log<level::ERR>(
+            "ipmiGetManagerCertFingerPrint: unable to open certificate");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    x = PEM_read_bio_X509_AUX(cert, NULL, NULL, NULL);
+    if (x == NULL)
+    {
+        BIO_free(cert);
+        log<level::ERR>(
+            "ipmiGetManagerCertFingerPrint: unable to load certificate");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    std::vector<uint8_t> fingerPrintData(EVP_MAX_MD_SIZE);
+    if (!X509_digest(x, fdig, fingerPrintData.data(), &n))
+    {
+        X509_free(x);
+        BIO_free(cert);
+        log<level::ERR>("ipmiGetManagerCertFingerPrint: out of memory");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    fingerPrintData.resize(n);
+
+    X509_free(x);
+    BIO_free(cert);
+
+    try
+    {
+        std::vector<uint8_t> respBuf;
+
+        respBuf.push_back(1); // 01h: SHA-256. The length of the fingerprint
+                              // will be 32 bytes.
+
+        for (const auto& data : fingerPrintData)
+        {
+            respBuf.push_back(data);
+        }
+        return ipmi::responseSuccess(respBuf);
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get Manager Cert FingerPrint",
+                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
         return ipmi::responseResponseError();
     }
 }
@@ -3797,6 +4004,26 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetipmiChannelRfHi,
                           ipmi::Privilege::Admin, ipmi::ipmiGetipmiChannelRfHi);
 
+    // <Get Redfish Service UUID>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetRedfishServiceUuid));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetRedfishServiceUuid,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetRedfishServiceUuid);
+
+    // <Get Redfish Service Port Number>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetRedfishServicePort));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetRedfishServicePort,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetRedfishServicePort);
+
     // <Get Bootstrap Account Credentials>
     log<level::NOTICE>(
         "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
@@ -3806,6 +4033,16 @@ void registerNvOemFunctions()
                                ipmi::nvidia::misc::cmdGetBootStrapAcc,
                                ipmi::Privilege::sysIface,
                                ipmi::ipmiGetBootStrapAccount);
+
+    // <Get Manager Certificate Fingerprint>
+    log<level::NOTICE>(
+        "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetManagerCertFingerPrint));
+
+    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
+                               ipmi::nvidia::misc::cmdGetManagerCertFingerPrint,
+                               ipmi::Privilege::Admin,
+                               ipmi::ipmiGetManagerCertFingerPrint);
 
     // <Get Maxp/MaxQ Configuration>
     log<level::NOTICE>(
