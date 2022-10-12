@@ -17,7 +17,12 @@ option (USE_ETH1_NETWORK_DEVICE
 
 option (sbmr-boot-progress
         "To Support Boot Progreess codes for ARM systems"
+	OFF)
+
+option (GH-oem-commands
+        "To support GH specific ipmi-oem-commands"
         OFF)
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -60,10 +65,22 @@ add_custom_command(OUTPUT include/ipmi-whitelist.hpp
                   DEPENDS generate-whitelist.py
                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library (znvipmioemcmds
-             SHARED src/oemcommands.cpp src/sensorcommands.cpp
-             src/storagecommands.cpp src/sbmr-bootprogress.cpp
-             )
+
+if(GH-oem-commands)
+    include_directories (${CMAKE_CURRENT_SOURCE_DIR}/Grace/include)
+    add_library (znvipmioemcmds
+                 SHARED Grace/src/ghoemcommands.cpp 
+    )
+
+else()
+    add_library (znvipmioemcmds
+                 SHARED src/oemcommands.cpp src/sensorcommands.cpp
+                 src/storagecommands.cpp src/sbmr-bootprogress.cpp
+    )
+             
+endif()
+
+
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (znvipmioemcmds PROPERTIES SOVERSION "0")
 target_link_libraries (znvipmioemcmds stdc++fs)
