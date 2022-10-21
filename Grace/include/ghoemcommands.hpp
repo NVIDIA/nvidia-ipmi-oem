@@ -27,11 +27,17 @@ namespace nvidia
 
 namespace app
 {
+   constexpr auto cmdSetFanMode = 0x73;
+   constexpr auto cmdAllFanZonesPWMDuty = 0x74;
+   constexpr auto cmdSetFanZonePWMDuty = 0x75;
 } // namespace app
 
 namespace misc
 {
-constexpr auto cmdGetOEMVersion = 0x01;
+   constexpr auto cmdGetOEMVersion = 0x01;
+   constexpr auto cmdSMBPBIPassthrough = 0x09;
+   constexpr auto cmdSMBPBIPassthroughExtended = 0x0A;
+   constexpr auto cmdSensorScanEnable = 0x85;
 
 } // namespace misc
 namespace chassis
