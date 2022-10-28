@@ -24,12 +24,14 @@ namespace ipmi
 namespace nvidia
 {
    constexpr auto netFnOemNV = 0x3C;
+   constexpr auto netFnOemPost = 0x30;
 
 namespace app
 {
    constexpr auto cmdSetFanMode = 0x73;
    constexpr auto cmdAllFanZonesPWMDuty = 0x74;
    constexpr auto cmdSetFanZonePWMDuty = 0x75;
+   constexpr auto cmdI2CMasterReadWrite = 0x81;
 } // namespace app
 
 namespace misc

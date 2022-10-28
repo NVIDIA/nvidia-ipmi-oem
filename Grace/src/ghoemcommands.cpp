@@ -65,6 +65,26 @@ using PropertyMapType =
 
 namespace ipmi
 {
+
+static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData) {
+    std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
+
+    int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
+    if (i2cDev < 0)
+    {
+        log<level::ERR>("Failed to open i2c bus",
+        phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
+        return ipmi::ccInvalidFieldRequest;
+    }
+    std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
+
+    auto ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
+    if (ret != ipmi::ccSuccess) {
+        log<level::ERR>("Failed to perform I2C transaction!");
+    }
+    return ret;
+}
+
 ipmi::RspType<
     uint8_t,  // Major Version
     uint8_t  // Minor Version
@@ -660,6 +680,19 @@ ipmi::RspType<uint8_t> ipmiOemGetLedStatus(uint8_t type) {
 }
 
 
+ipmi::RspType<std::vector<uint8_t>> ipmiI2CMasterReadWrite(
+	                                        uint8_t bus,
+	                                        uint8_t slaveAddr,
+	                                        uint8_t readCount,
+	                                        std::vector<uint8_t> writeData) {
+    std::vector<uint8_t> rdData(readCount);
+    /* slaveaddr is expected to be in 8bit format, i2cTransaction expects 7bit */
+    auto ret = i2cTransaction(bus, slaveAddr >> 1, writeData, rdData);
+    if (ret != ipmi::ccSuccess) {
+        return ipmi::response(ret);
+    }
+    return ipmi::responseSuccess(rdData);
+}
 
 }
 
@@ -766,4 +799,14 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin, ipmi::ipmiOemGetLedStatus);
     return;
     
+// <Master Read Write>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemPost),
+	entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdI2CMasterReadWrite));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
+		          ipmi::nvidia::app::cmdI2CMasterReadWrite,
+			  ipmi::Privilege::Admin, ipmi::ipmiI2CMasterReadWrite);
+
+
 }
