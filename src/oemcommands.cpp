@@ -3053,6 +3053,116 @@ static int pamFunctionConversation(int numMsg, const struct pam_message** msg,
     return PAM_CONV_ERR;
 }
 
+bool getRandomUserName(std::string& uniqueStr)
+{
+    std::ifstream randFp("/dev/urandom", std::ifstream::in);
+    char byte;
+    uint8_t maxStrSize = 16;
+    std::string invalidChar = "\'\"";
+
+    if (!randFp.is_open())
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBootStrapAccount: Failed to open urandom file");
+        return false;
+    }
+
+    for (uint8_t it = 0; it < maxStrSize; it++)
+    {
+        while (1)
+        {
+            if (randFp.get(byte))
+            {
+                if (iswalnum(byte))
+                {
+                    if (it == 0)
+                    {
+                        if (iswalpha(byte))
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+        uniqueStr.push_back(byte);
+    }
+    randFp.close();
+    return true;
+}
+
+bool getRandomPassword(std::string& uniqueStr)
+{
+    std::ifstream randFp("/dev/urandom", std::ifstream::in);
+    char byte;
+    uint8_t maxStrSize = 16;
+    std::string invalidChar = "\'\"";
+
+    if (!randFp.is_open())
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBootStrapAccount: Failed to open urandom file");
+        return false;
+    }
+
+    for (uint8_t it = 0; it < maxStrSize; it++)
+    {
+        while (1)
+        {
+            if (randFp.get(byte))
+            {
+                if (iswprint(byte))
+                {
+                    if (!iswspace(byte) &&
+                        invalidChar.find(byte) == std::string::npos)
+                    {
+                        if (it == 0)
+                        {
+                            if (iswlower(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else if (it == 1)
+                        {
+                            if (iswupper(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else if (it == 2)
+                        {
+                            if (iswdigit(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else if (it == 3)
+                        {
+                            if (!iswdigit(byte) && !iswalpha(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        uniqueStr.push_back(byte);
+    }
+    randFp.close();
+    std::random_shuffle(uniqueStr.begin(), uniqueStr.end());
+    return true;
+}
+
 int pamUpdatePasswd(const char* username, const char* password)
 {
     const struct pam_conv localConversation = {pamFunctionConversation,
@@ -3122,37 +3232,6 @@ bool isValidUserName(ipmi::Context::ptr ctx, const std::string& userName)
     return true;
 }
 
-bool getAlphaNumString(std::string& uniqueStr)
-{
-    std::ifstream randFp("/dev/urandom", std::ifstream::in);
-    char byte;
-    uint8_t maxStrSize = 16;
-
-    if (!randFp.is_open())
-    {
-        phosphor::logging::log<level::ERR>(
-            "ipmiGetBootStrapAccount: Failed to open urandom file");
-        return false;
-    }
-
-    for (uint8_t it = 0; it < maxStrSize; it++)
-    {
-        while (1)
-        {
-            if (randFp.get(byte))
-            {
-                if (iswalnum(byte))
-                {
-                    break;
-                }
-            }
-        }
-        uniqueStr.push_back(byte);
-    }
-    randFp.close();
-    return true;
-}
-
 ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccount(ipmi::Context::ptr ctx,
                             uint8_t disableCredBootStrap)
@@ -3167,13 +3246,13 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             phosphor::logging::log<level::ERR>(
                 "ipmiGetBootStrapAccount: Credential BootStrapping Disabled "
                 "Get BootStrap Account command rejected.");
-            return ipmi::responseSuccess();
+            return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
         }
 
         std::string userName;
         std::string password;
 
-        bool ret = getAlphaNumString(userName);
+        bool ret = getRandomUserName(userName);
         if (!ret)
         {
             phosphor::logging::log<level::ERR>(
@@ -3188,7 +3267,7 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             return ipmi::responseResponseError();
         }
 
-        ret = getAlphaNumString(password);
+        ret = getRandomPassword(password);
         if (!ret)
         {
             phosphor::logging::log<level::ERR>(
