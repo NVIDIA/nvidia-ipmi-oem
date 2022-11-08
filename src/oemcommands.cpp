@@ -43,7 +43,6 @@ const char* networkObj = "/xyz/openbmc_project/network";
 const char* networkResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 
 // Software BMC Updater object in dbus
-const char* sftBMCService = "xyz.openbmc_project.Software.BMC.Updater";
 const char* sftBMCObj = "/xyz/openbmc_project/software";
 const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 
@@ -302,6 +301,9 @@ ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
     // BMC software updater factory reset
     try
     {
+        std::string sftBMCService =
+                ipmi::getService(*sdbusp, sftBMCResetIntf, sftBMCObj);
+
         sdbusp->yield_method_call<void>(
             yield, ec,
             sftBMCService,
