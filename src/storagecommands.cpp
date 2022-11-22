@@ -25,7 +25,6 @@
 #include <boost/process.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/message.hpp>
-#include <phosphor-ipmi-host/selutility.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/message/types.hpp>
 #include <sdbusplus/timer.hpp>
@@ -711,18 +710,6 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
     return IPMI_CC_OK;
 }
 
-ipmi::RspType<uint32_t> ipmiStorageGetSELTime()
-{
-    struct timespec selTime = {};
-
-    if (clock_gettime(CLOCK_REALTIME, &selTime) < 0)
-    {
-        return ipmi::responseUnspecifiedError();
-    }
-
-    return ipmi::responseSuccess(selTime.tv_sec);
-}
-
 std::vector<uint8_t> getType12SDRs(uint16_t index, uint16_t recordId)
 {
     std::vector<uint8_t> resp;
@@ -833,10 +820,6 @@ void registerStorageFunctions()
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
                           ipmi::storage::cmdWriteFruData,
                           ipmi::Privilege::Operator, ipmiStorageWriteFruData);
-    // <Get SEL Time>
-    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
-                          ipmi::storage::cmdGetSelTime, ipmi::Privilege::User,
-                          ipmiStorageGetSELTime);
 }
 } // namespace storage
 } // namespace ipmi
