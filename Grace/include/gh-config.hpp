@@ -39,6 +39,21 @@ constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor
                                               "nvidia-gpu-manager "
                                               "xyz.openbmc_project.fansensor";
 
+constexpr auto fpgaMidSSDLedReadyMove   = 0x0e;
+constexpr auto fpgaMidSSDLedActivity    = 0x0c;
+constexpr auto fpgaMidSSDLedFaultBase   = 0x08;
+constexpr auto fpgaMidSSDLedFaultWidth  = 3;
+constexpr auto fpgaMidSetLedFaultMaxPattern = 4;
+constexpr auto fpgaMidSetLedOtherMaxPattern = 1;
+constexpr auto fpgaMidI2cBus            = 2;
+constexpr auto fpgaI2cAddress           = 0x3c;
+
+constexpr auto powerLedName                 = "power_led";
+constexpr auto faultLedName                 = "fault_led";
+constexpr auto mbLedName                    = "motherboard_debug_led";  
+
+
+
 
 }
 }
