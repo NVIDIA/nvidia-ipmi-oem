@@ -22,7 +22,10 @@ option (sbmr-boot-progress
 option (GH-oem-commands
         "To support GH specific ipmi-oem-commands"
         OFF)
-
+option (BF3-OEM-COMMANDS
+        "To support disable specific ipmi-oem-commands"
+        OFF)
+        
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -78,9 +81,33 @@ if(GH-oem-commands)
         Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
     )
 else()
+<<<<<<< HEAD
     SET(flag_library_sources
         src/oemcommands.cpp src/sbmr-bootprogress.cpp
     )
+=======
+    if(BF2-OEM-COMMANDS)
+        add_library (znvipmioemcmds
+                    SHARED src/oemcommands.cpp src/sensorcommands.cpp
+                    src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                    src/disabling-oem-commands/oemcommands.cpp
+
+    )
+    elseif(BF3-OEM-COMMANDS)
+        add_library (znvipmioemcmds
+                    SHARED src/oemcommands.cpp src/sensorcommands.cpp
+                    src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                    src/disabling-oem-commands/oemcommands.cpp
+
+    )
+    else()
+        add_library (znvipmioemcmds
+                    SHARED src/oemcommands.cpp src/sensorcommands.cpp
+                    src/storagecommands.cpp src/sbmr-bootprogress.cpp                    
+    )
+    endif()
+             
+>>>>>>> 1d0ed58... Disabling the following commandes on BF3:
 endif()
 
 add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
@@ -121,4 +148,9 @@ target_compile_definitions (
     znvipmioemcmds PRIVATE
     $<$<BOOL:${sbmr-boot-progress}>:
     -DFEATURE_SBMR_BOOTPROGRESS>
+)
+target_compile_definitions (
+    znvipmioemcmds PRIVATE
+    $<$<BOOL:${BF3-OEM-COMMANDS}>:
+    -DBF3-OEM-COMMANDS>
 )

@@ -177,7 +177,9 @@ std::string defaultCertPath = "/etc/ssl/certs/https/server.pem";
 static constexpr const char* persistentDataFilePath =
     "/home/root/bmcweb_persistent_data.json";
 
-void registerNvOemFunctions() __attribute__((constructor));
+
+void registerNvOemFunctions() __attribute__((constructor(101)));
+
 
 using namespace phosphor::logging;
 
