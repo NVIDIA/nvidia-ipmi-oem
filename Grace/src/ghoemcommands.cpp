@@ -65,26 +65,6 @@ using PropertyMapType =
 
 namespace ipmi
 {
-
-static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData) {
-    std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
-
-    int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
-    if (i2cDev < 0)
-    {
-        log<level::ERR>("Failed to open i2c bus",
-        phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
-        return ipmi::ccInvalidFieldRequest;
-    }
-    std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
-
-    auto ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
-    if (ret != ipmi::ccSuccess) {
-        log<level::ERR>("Failed to perform I2C transaction!");
-    }
-    return ret;
-}
-
 ipmi::RspType<
     uint8_t,  // Major Version
     uint8_t  // Minor Version
