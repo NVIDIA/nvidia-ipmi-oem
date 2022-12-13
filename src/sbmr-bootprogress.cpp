@@ -28,8 +28,10 @@ ipmi::RspType<uint8_t> ipmiSbmrSendBootProgressCode(
             phosphor::logging::entry("EXCEPTION=%s", e.what()));
         return ipmi::responseUnspecifiedError();
     }
-    if (chInfo.mediumType !=
-        static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20))
+    if ((chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20)) &&
+        (chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)))
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmiSbmrSendBootProgressCode: Error - supported only in SSIF "
@@ -122,8 +124,10 @@ ipmi::RspType<uint8_t> ipmiOemSbmrSendDescription(
             phosphor::logging::entry("EXCEPTION=%s", e.what()));
         return ipmi::responseUnspecifiedError();
     }
-    if (chInfo.mediumType !=
-        static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20))
+    if ((chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20)) &&
+        (chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)))
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmiOemSbmrSendDescription: Error - supported only in SSIF "
