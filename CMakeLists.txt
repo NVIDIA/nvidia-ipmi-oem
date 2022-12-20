@@ -69,7 +69,7 @@ add_custom_command(OUTPUT include/ipmi-whitelist.hpp
 if(GH-oem-commands)
     include_directories (${CMAKE_CURRENT_SOURCE_DIR}/Grace/include)
     add_library (znvipmioemcmds
-                 SHARED Grace/src/ghoemcommands.cpp 
+                 SHARED Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
     )
 
 else()
