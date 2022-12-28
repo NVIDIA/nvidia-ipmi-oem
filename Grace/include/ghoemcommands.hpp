@@ -26,6 +26,7 @@ namespace nvidia
    constexpr auto netFnOemNV = 0x3C;
    constexpr auto netFnOemPost = 0x30;
    constexpr auto netFnOemGlobal = 0x32;
+   constexpr auto netGroupExt = 0x52;
 
 namespace app
 {
@@ -56,6 +57,15 @@ namespace misc
    constexpr auto getLedStatusPowerLed = 0x00;
    constexpr auto getLedStatusFaultLed = 0x01;
    constexpr auto getLedStatusMotherBoardLed = 0x10;
+
+   constexpr auto cmdGetUsbDescription = 0x30;
+   constexpr auto cmdGetUsbSerialNum = 0x31;
+   constexpr auto cmdGetRedfishHostName = 0x32;
+   constexpr auto cmdGetipmiChannelRfHi = 0x33;
+   constexpr auto cmdGetBootStrapAcc = 0x02;
+   constexpr auto cmdGetRedfishServiceUuid = 0x34;
+   constexpr auto cmdGetRedfishServicePort = 0x35;
+   constexpr auto cmdGetManagerCertFingerPrint = 0x01;
 
 
 } // namespace misc
