@@ -67,21 +67,23 @@ add_custom_command(OUTPUT include/ipmi-whitelist.hpp
 
 
 # common libraries
-add_library(znvipmioemcmds SHARED src/storagecommands.cpp src/sensorcommands.cpp)
+SET(common_library_sources
+    src/storagecommands.cpp src/sensorcommands.cpp
+)
 
 # flag driven libraries
 if(GH-oem-commands)
     include_directories (${CMAKE_CURRENT_SOURCE_DIR}/Grace/include)
-    add_library (
-                 SHARED Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
+    SET(flag_library_sources
+        Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
     )
-
 else()
-    add_library (
-                 SHARED src/oemcommands.cpp src/sbmr-bootprogress.cpp
+    SET(flag_library_sources
+        src/oemcommands.cpp src/sbmr-bootprogress.cpp
     )
-             
 endif()
+
+add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
 
 
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
