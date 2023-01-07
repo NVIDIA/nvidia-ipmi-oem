@@ -1680,7 +1680,7 @@ ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
     ipmiGetBiosPostCode(ipmi::Context::ptr ctx)
 {
     using namespace ipmi::nvidia::app;
-    uint64_t pcode = 0;
+    uint8_t pcode = 0;
     uint16_t bootIndex = 1; // 1 for the latest boot cycle's POST Code
     uint16_t postVecLen = 0;
     uint16_t postVecStart = 0;

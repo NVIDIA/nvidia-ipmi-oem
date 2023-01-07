@@ -39,7 +39,7 @@ constexpr auto cmdSetFanZonePWMDuty = 0x75;
 constexpr auto cmdGetBiosPostStatus = 0x25;
 constexpr auto cmdGetBiosPostCode = 0xE9;
 constexpr auto cmdI2CMasterReadWrite = 0x81;
-constexpr auto cmdGetBiosPostCodeToIpmiMaxSize = 1020;
+constexpr auto cmdGetBiosPostCodeToIpmiMaxSize = 945;
 
 } // namespace app
 
