@@ -80,34 +80,27 @@ if(GH-oem-commands)
     SET(flag_library_sources
         Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
     )
-else()
-<<<<<<< HEAD
-    SET(flag_library_sources
-        src/oemcommands.cpp src/sbmr-bootprogress.cpp
-    )
-=======
+else()    
     if(BF2-OEM-COMMANDS)
-        add_library (znvipmioemcmds
-                    SHARED src/oemcommands.cpp src/sensorcommands.cpp
-                    src/storagecommands.cpp src/sbmr-bootprogress.cpp
-                    src/disabling-oem-commands/oemcommands.cpp
+    SET (flag_library_sources
+                src/oemcommands.cpp src/sensorcommands.cpp
+                src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                src/BF/oemcommands.cpp
 
     )
     elseif(BF3-OEM-COMMANDS)
-        add_library (znvipmioemcmds
-                    SHARED src/oemcommands.cpp src/sensorcommands.cpp
-                    src/storagecommands.cpp src/sbmr-bootprogress.cpp
-                    src/disabling-oem-commands/oemcommands.cpp
-
-    )
+    SET(flag_library_sources
+                src/oemcommands.cpp src/sensorcommands.cpp
+                src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                src/BF/oemcommands.cpp
+        )
     else()
-        add_library (znvipmioemcmds
-                    SHARED src/oemcommands.cpp src/sensorcommands.cpp
-                    src/storagecommands.cpp src/sbmr-bootprogress.cpp                    
-    )
+    SET(flag_library_sources
+            src/oemcommands.cpp src/sbmr-bootprogress.cpp
+        )
+
     endif()
-             
->>>>>>> 1d0ed58... Disabling the following commandes on BF3:
+
 endif()
 
 add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
