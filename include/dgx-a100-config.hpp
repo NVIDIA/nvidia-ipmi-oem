@@ -48,22 +48,15 @@ constexpr auto fpgaMidSSDLedFaultBase   = 0x08;
 constexpr auto fpgaMidSSDLedFaultWidth  = 3;
 constexpr auto fpgaMidSetLedFaultMaxPattern = 4;
 constexpr auto fpgaMidSetLedOtherMaxPattern = 1;
+constexpr auto cecI2cAddress            = 0x55;
+constexpr auto cecI2cBus                = 1;
+constexpr auto cecI2cFwSlotReg          = 0x9B;
+constexpr auto cecI2cVersionRegister    = 0x9c;
 constexpr auto cecFpgaI2cBus            = 10;
 constexpr auto cecFpgaI2cVersionRegister = 0x01;
-constexpr auto cecI2cFwSlotReg          = 0x9B;
-constexpr auto cecI2cAddress          = 0x55;
-constexpr auto cecI2cBus                = 7;
-constexpr auto cecI2cVersionRegister    = 1;
-constexpr auto ethSwitchI2cBusBF2       = 0xd;
-constexpr auto ethSwitchI2caddressBF2   = 0x5f;
-constexpr auto cecI2cVersionRegisterBF2  = 0x9c;
 
-//BF3:
-constexpr auto cecI2cAddressBF3         = 0x52;
-constexpr auto cecI2cBusBF3             = 0xf;
-constexpr auto cecI2cVersionRegisterBF3 = 7;
-constexpr auto ethSwitchI2cBusBF3       = 10;
-constexpr auto ethSwitchI2caddressBF3   = 0x5f;
+
+
 
 
 
@@ -102,9 +95,8 @@ constexpr auto mbLedName                    = "motherboard_debug_led";
 
 constexpr auto biosGpioId                   = 74;
 constexpr auto biosGpioChip                 = mbWpGpioChip;
-constexpr auto liveFishGpio                 = 929;
-constexpr auto socRstGpio                   = 932;
-constexpr auto preRstGpio                   = 952;	
+
+
 
 } //namespace nvidia
 } //namespace ipmi

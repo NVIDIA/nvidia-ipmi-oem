@@ -331,46 +331,10 @@ static int executeCmd(const char* path, ArgTypes&&... tArgs)
 }
 
 
-ipmi::RspType<uint8_t>
-ipmiBFResetControl(uint8_t resetOption)
-{
-    int response;
-    switch(resetOption)
-    {
-        case 0x00: // soc hard reset
-            response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "soc_hard_reset");
-            break;
-        case 0x01: // arm hard reset - nsrst
-            response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "arm_hard_reset");
-            break;
-        case 0x02: // arm soft reset
-            response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "arm_soft_reset");
-            break;
-        case 0x03: // tor eswitch reset
-            response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "do_tor_eswitch_reset");
-            break;
-        case 0x04: // arm hard reset - nsrst - secondary DPU
-            response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "bf2_nic_bmc_ctrl1");
-            break;
-        case 0x05: // arm soft reset - secondary DPU
-            response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "bf2_nic_bmc_ctrl0");
-            break;
-        default:
-            return ipmi::response(ipmi::ccInvalidFieldRequest);
-    }
 
-    if(response)
-    {
-        log<level::ERR>("Reset Command failed.",
-                phosphor::logging::entry("rc= %d", response));
-        return ipmi::response(ipmi::ccResponseError);
-    }
-
-    return ipmi::response(ipmi::ccSuccess);
-}
-
-static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData,  bool SMBUS = false) {
+static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData) {
     std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
+
     int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
     if (i2cDev < 0)
     {
@@ -380,13 +344,7 @@ static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8
     }
     std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
 
-    auto ret =ipmi::ccSuccess;
-    if(SMBUS == false) {
-            ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
-    }else{
-             ret = ipmi::i2cReadDataBlock(i2cBus, slaveAddr, rdData, ipmi::nvidia::cecI2cVersionRegisterBF3);
-    }
-
+    auto ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
     if (ret != ipmi::ccSuccess) {
         log<level::ERR>("Failed to perform I2C transaction!");
     }
@@ -1687,7 +1645,7 @@ ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
     ipmiGetBiosPostCode(ipmi::Context::ptr ctx)
 {
     using namespace ipmi::nvidia::app;
-    uint8_t pcode = 0;
+    uint64_t pcode = 0;
     uint16_t bootIndex = 1; // 1 for the latest boot cycle's POST Code
     uint16_t postVecLen = 0;
     uint16_t postVecStart = 0;
@@ -1813,19 +1771,13 @@ static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscGetPEXSwVersion(u
     return ipmi::responseSuccess(0x01, version);
 }
 
-static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscCECCommand(uint8_t bus, uint8_t reg, uint8_t bfModel = 1) {
+static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscCECCommand(uint8_t bus, uint8_t reg) {
     using namespace ipmi::nvidia::misc;
+
     std::vector<uint8_t> writeData={0x00, reg};
-    std::vector<uint8_t> readBuf(4);
-    bool SMBUS = true;
-    uint8_t address =  ipmi::nvidia::cecI2cAddressBF3;    
-    if(bfModel != 3){
-        SMBUS = false;
-        address =  ipmi::nvidia::cecI2cAddress;
-        readBuf.pop_back();
-        readBuf.pop_back(); 
-    }  
-    auto ret = i2cTransaction(bus, address, writeData, readBuf,SMBUS);
+    std::vector<uint8_t> readBuf(2);
+    auto ret = i2cTransaction(bus, ipmi::nvidia::cecI2cAddress, writeData, readBuf);
+
     if (ret != ipmi::ccSuccess) {
         log<level::ERR>("CEC version read failed",
             phosphor::logging::entry("BUS=%d", bus));
@@ -2074,54 +2026,6 @@ ipmi::RspType<uint8_t, std::vector<uint8_t>> getBMCActiveSoftwareVersionInfo(ipm
     return ipmi::responseSuccess(2, ret);;
 }
 
-ipmi::RspType<uint8_t, std::vector<uint8_t>> getBMCSoftwareVersionInfo(){
-     std::string versionStr; 
-        std::ifstream os_relase("/etc/os-release");
-        for (int i =0; i < 4; i++){
-            getline (os_relase, versionStr);
-            std::cout << versionStr<<std::endl;
-        }  
-        os_relase.close();
-        std::vector<std::string> parts;
-        boost::split(parts, versionStr, boost::is_any_of("=-."));
-        uint8_t maj ;
-        uint8_t min ;
-        uint16_t d0 = 0 ;
-        uint8_t d1 = 0;
-        for (int i =0; i < parts.size(); i++){
-            std::cout << parts[i] << std::endl;
-        }  
-        if (parts[0] != "VERSION_ID" ) {
-             return ipmi::responseResponseError();
-        }
-
-        
-        
-        //check if BF3
-        std::vector<uint8_t> ret(6);
-        std::string parts1 = parts[1];
-        if(parts1[0] > 0x39 || parts1[0] < 0x30  ){
-            maj = std::stoi(parts[2]); // major rev 
-            min = std::stoi(parts[3]); // minor rev, need to convert to bcd 
-        //    d0 = std::stoi(parts[3]); 
-        }else{
-            maj = std::stoi(parts[1]); // major rev 
-            min = std::stoi(parts[2]); // minor rev, need to convert to bcd 
-            d0 = std::stoi(parts[3]); // extra part 1 
-            
-        }
-
-        ret[0] = maj & ~(1 << 7); /* mask MSB off */
-        min = (min > 99 ? 99 : min);
-        ret[1] = min % 10 + (min / 10) * 16;
-        ret[2] = d0 & 0xff;
-        ret[3] = (d0 >> 8) & 0xff;
-        ret[4] = d1; /* can only be 0 or 1 */
-        ret[5] = 0;
-
-        return ipmi::responseSuccess(2, ret);
-        
-}
 
 ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscFirmwareVersion(ipmi::Context::ptr ctx, uint8_t device)
 {
@@ -3731,228 +3635,7 @@ ipmi::RspType<uint8_t>
     }
 }
 
-ipmi::RspType<uint8_t, std::vector<uint8_t>>ipmiGetFirmwareVersionBMC(ipmi::Context::ptr ctx) {
-        /* BMC FW version requests */
-   
-    return getBMCSoftwareVersionInfo();  
-}
 
-ipmi::RspType<uint8_t, std::vector<uint8_t>>ipmiGetFirmwareVersionCEC(uint8_t bfModel ) {
-
-    if (bfModel == 2){
-        return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBus,ipmi::nvidia::cecI2cVersionRegisterBF2,bfModel);
-    }
-    else if (bfModel == 3){
-        return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBusBF3,ipmi::nvidia::cecI2cVersionRegisterBF3,bfModel);
-    }
-   
-    phosphor::logging::log<level::NOTICE>("BF model can be only  2 or 3");
-    return ipmi::responseResponseError();
-}
-
-
-static int gpioExportLF(uint32_t gpio) {
-    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio))) {
-        std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
-        if (!exportOf.is_open()) {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio export!");
-            return -2;
-        }
-        exportOf << gpio;
-        exportOf.close();
-    }
-    return gpio;
-}
-
-static bool setGpioRawLF(uint32_t gpio, uint32_t value) {
-    int gp = gpioExportLF(gpio);
-    std::ofstream directionOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/direction", std::ofstream::out);
-    if (!directionOf.is_open()) {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio direction!");
-        return false;
-    }
-    /* set to ouput, then set value */
-    directionOf << "out";
-    directionOf.close();
-    std::ofstream valueOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/value", std::ofstream::out);
-    if (!valueOf.is_open()) {
-        directionOf.close();
-        phosphor::logging::log<phosphor::logging::level::ERR>("Failed to open gpio value!");
-        return false;
-    }
-    valueOf << value;
-    valueOf.close();
-    return true;
-}
-
-static void cleangpio(){  
-    if (!setGpioRawLF(nvidia::socRstGpio,1) || !setGpioRawLF(nvidia::preRstGpio,1) || !setGpioRawLF(nvidia::liveFishGpio,1)){ 
-        phosphor::logging::log<level::ERR>("unable to restore gpios to default"); 
-    }else{
-        phosphor::logging::log<level::NOTICE>("restored gpios to default (1)");
-    } 
-    return;
-}
-
-static bool changeSocRstAndPreRstGpios(uint32_t value){
-    if (!setGpioRawLF(nvidia::preRstGpio,value)){ 
-        phosphor::logging::log<level::ERR>("failed to write to PRE_RESET gpio");
-        cleangpio();
-        return false;
-        }  
-  
-
-    if (!setGpioRawLF(nvidia::socRstGpio,value)){ 
-        phosphor::logging::log<level::ERR>("failed to write to SOC_RESET gpio");
-        cleangpio();
-        return false;
-        }  
-    if (value == 0){
-        sleep(3);
-    }else{
-        sleep(1);
-    }
-    return true;
-}
-
-
-ipmi::RspType<> ipmicmdEnterLiveFish() {
-    if (!setGpioRawLF(nvidia::liveFishGpio,0)){ 
-        phosphor::logging::log<level::ERR>("failed to write '0' to LIVE_FISH gpio");
-        cleangpio();
-        return ipmi::responseResponseError();
-        }
-    if (!changeSocRstAndPreRstGpios(0))
-        return ipmi::responseResponseError();   
-    if (!changeSocRstAndPreRstGpios(1))
-        return ipmi::responseResponseError();
-    if (!setGpioRawLF(nvidia::liveFishGpio,1)){ 
-        phosphor::logging::log<level::ERR>("failed to write '1' to LIVE_FISH gpio");
-        cleangpio();
-        return ipmi::responseResponseError();   
-    }
-    phosphor::logging::log<level::NOTICE>("Gpios in livefish mode,please reboot the server to enter the DPU into livefish Mode");
-    return ipmi::responseSuccess();
-
-} 
-
-ipmi::RspType<> ipmicmdExitLiveFish() {
-    if (!changeSocRstAndPreRstGpios(0))
-        return ipmi::responseResponseError();
-    if (!changeSocRstAndPreRstGpios(1))
-        return ipmi::responseResponseError();
-    phosphor::logging::log<level::NOTICE>("Gpios aren't in livefish mode, please reboot the server to enter the DPU to normal mode");
-    return ipmi::responseSuccess();
-}
-
- ipmi::RspType<> ipmiSupportLaunchpad(uint8_t newState, uint8_t bfModel){
-        if(bfModel != 2 && bfModel != 3 ){
-             phosphor::logging::log<level::NOTICE>("BF model can be only  2 or 3");
-            return ipmi::responseResponseError();
-   
-        }
-        if(newState != 0 && newState != 1){
-            log<level::ERR>("Unsupported argument",
-                phosphor::logging::entry("Requested State=%d", newState));
-            return ipmi::responseInvalidFieldRequest(); 
-        }
-        //disable/ enable rshim
-        uint8_t newRshimState = 0;
-        if (newState == 0)
-            newRshimState = 1; 
-        auto ret = ipmiSetRshimState(newRshimState);
-        /*
-        if (std::get<0>(ret)  != ipmi::ccSuccess)  {
-            phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't disable rshim");
-            return ipmi::responseResponseError();
-        }
-        */
-        //disable/ enable 3 port eth switch 
-        std::vector<uint8_t> writeData={0x2a, 0x04, 0x00, 0x00, 0x00, 0x06};
-        std::vector<uint8_t> readBuf(4);
-        if (newState == 0)
-            writeData[5] = 0x07; 
-
-        uint8_t address =  ipmi::nvidia::ethSwitchI2caddressBF3;
-        uint8_t bus =  ipmi::nvidia::ethSwitchI2cBusBF3; 
-        if (bfModel == 2) {
-            address = ipmi::nvidia::ethSwitchI2caddressBF2;
-            bus =  ipmi::nvidia::ethSwitchI2cBusBF2;
-        }       
-        auto ret_eth = i2cTransaction(bus, address, writeData, readBuf);
-        
-        if (ret_eth != ipmi::ccSuccess)  {
-            phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't disable 3 port eth switch");
-            return ipmi::responseResponseError();
-        }
-        //disable/ enable i2c0 (to the DPU)
-        int response;
-        std::string devmem = "devmem 0x1e78a080 ";
-        if (bfModel == 2){
-             devmem = "devmem 0x1e78a040 ";
-        }
-        response = executeCmd(devmem.c_str());
-        if(response)
-        {
-            log<level::ERR>("devmem Command failed.",
-                    phosphor::logging::entry("response= %d", response));
-            return ipmi::response(ipmi::ccResponseError);
-        }
-        std::cout<<" response "<<response<<std::endl;
-        if(newState == 1){
-            response = response & 0xfffffffd;
-        }else{
-             response = response | 0x2;
-        }
-        std::cout<<"response "<<response<<std::endl;
-        char writeResponse [9];
-        sprintf(writeResponse, "%X", response);
-        devmem = "devmem 0x1e78a080 w 0x";
-         if (bfModel == 2){
-           devmem = "devmem 0x1e78a040 w 0x";
-        }
-        std::string writeResponseString(writeResponse);
-        devmem = devmem + writeResponseString;
-        std::cout<<"devmem "<<devmem<<std::endl;
-        response = executeCmd(devmem.c_str());
-        if(response)
-        {
-            log<level::ERR>("devmem Command failed.",
-                    phosphor::logging::entry("response= %d", response));
-            return ipmi::response(ipmi::ccResponseError);
-        }
-        return ipmi::responseSuccess();
-    }
-
-
-
-ipmi::RspType<uint8_t, std::vector<uint8_t>>ipmi3PortEthSwitchStatus( uint8_t bfModel) {
-        if(bfModel != 2 && bfModel != 3 ){
-             phosphor::logging::log<level::NOTICE>("BF model can be only  2 or 3");
-            return ipmi::responseResponseError();
-   
-        }
-        std::vector<uint8_t> writeData={0x2a, 0x04};
-        std::vector<uint8_t> readBuf(4);
-        uint8_t ethSwitchI2cBus = ipmi::nvidia::ethSwitchI2cBusBF3;
-        uint8_t ethSwitchI2caddress = ipmi::nvidia::ethSwitchI2caddressBF3;
-        if (bfModel == 2) {
-            ethSwitchI2caddress = ipmi::nvidia::ethSwitchI2caddressBF2;
-            ethSwitchI2cBus = ipmi::nvidia::ethSwitchI2cBusBF2;
-        }       
-        auto ret_eth = i2cTransaction(ethSwitchI2cBus,ethSwitchI2caddress, writeData, readBuf);
-        
-        if (ret_eth != ipmi::ccSuccess)  {
-            phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't read the 3 port eth switch status");
-            return ipmi::responseResponseError();
-        }
-        
-   
-    return ipmi::responseSuccess(0x00, readBuf);
-   
-    } 
 
 
 } // namespace ipmi
@@ -3978,64 +3661,7 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetBMCBootComplete);
                           
-    //Support Launchpad
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSupportLaunchpad));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdSupportLaunchpad,
-                          ipmi::Privilege::Admin, ipmi::ipmiSupportLaunchpad);
     
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmd3PortEthSwitchStatus));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmd3PortEthSwitchStatus,
-                          ipmi::Privilege::Admin, ipmi::ipmi3PortEthSwitchStatus);
-    
-    
-
-     //Enter Live Fish mode  
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdEnterLiveFish));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdEnterLiveFish,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdEnterLiveFish); 
-
-
-
-
-    //Exit Live Fish mode 
-
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdExitLiveFish));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdExitLiveFish,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdExitLiveFish); 
-     //  Get BMC FW version 
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetFirmwareVersionBMC));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdGetFirmwareVersionBMC,
-                          ipmi::Privilege::Admin, ipmi::ipmiGetFirmwareVersionBMC);
-
-    //  Get CEC FW version  
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetFirmwareVersionCEC));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdGetFirmwareVersionCEC,
-                          ipmi::Privilege::Admin, ipmi::ipmiGetFirmwareVersionCEC);
-
 
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
@@ -4047,15 +3673,7 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSystemFactoryReset);
 
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdBFResetControl));
 
-    // <BF2 and BF3 Reset Control>
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdBFResetControl,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiBFResetControl);
 
     // <Get DNS Config>
     log<level::NOTICE>(

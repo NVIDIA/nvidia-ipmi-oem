@@ -6,6 +6,17 @@ namespace ipmi
 {
 namespace nvidia
 {
+constexpr auto ethSwitchI2cBusBF2        = 0xe;
+constexpr auto ethSwitchI2caddressBF2    = 0x5f;
+constexpr auto cecI2cVersionRegisterBF2  = 0x9c;
+constexpr auto cecI2cAddressBF3          = 0x52;
+constexpr auto cecI2cBusBF3              = 0xf;
+constexpr auto cecI2cVersionRegisterBF3  = 7;
+constexpr auto ethSwitchI2cBusBF3        = 10;
+constexpr auto ethSwitchI2caddressBF3    = 0x5f;
+constexpr auto liveFishGpio              = 929;
+constexpr auto socRstGpio                = 932;
+constexpr auto preRstGpio                = 952;	
 
 
 namespace app

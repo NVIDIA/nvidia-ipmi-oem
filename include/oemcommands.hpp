@@ -28,7 +28,6 @@ constexpr auto cmdSetRshimState = 0x6A;
 constexpr auto cmdPSUInventoryInfo = 0x0E;
 constexpr auto cmdGetSELPolicy = 0x7E;
 constexpr auto cmdSetSELPolicy = 0x7F;
-constexpr auto cmdBFResetControl = 0xA1;
 constexpr auto cmdGetNTPConfig = 0xA7;
 constexpr auto cmdSetNTPConfig = 0xA8;
 constexpr auto cmdGetDNSConfig = 0x6B;
