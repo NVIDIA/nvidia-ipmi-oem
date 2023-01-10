@@ -22,10 +22,7 @@ option (sbmr-boot-progress
 option (GH-oem-commands
         "To support GH specific ipmi-oem-commands"
         OFF)
-option (BF3-OEM-COMMANDS
-        "To support disable specific ipmi-oem-commands"
-        OFF)
-        
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -80,27 +77,10 @@ if(GH-oem-commands)
     SET(flag_library_sources
         Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
     )
-else()    
-    if(BF2-OEM-COMMANDS)
-    SET (flag_library_sources
-                src/oemcommands.cpp src/sensorcommands.cpp
-                src/storagecommands.cpp src/sbmr-bootprogress.cpp
-                src/BF/oemcommands.cpp
-
+else()
+    SET(flag_library_sources
+        src/oemcommands.cpp src/sbmr-bootprogress.cpp
     )
-    elseif(BF3-OEM-COMMANDS)
-    SET(flag_library_sources
-                src/oemcommands.cpp src/sensorcommands.cpp
-                src/storagecommands.cpp src/sbmr-bootprogress.cpp
-                src/BF/oemcommands.cpp
-        )
-    else()
-    SET(flag_library_sources
-            src/oemcommands.cpp src/sbmr-bootprogress.cpp
-        )
-
-    endif()
-
 endif()
 
 add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
