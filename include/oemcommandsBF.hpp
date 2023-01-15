@@ -8,7 +8,10 @@ namespace nvidia
 {
 constexpr auto ethSwitchI2cBusBF2        = 0xe;
 constexpr auto ethSwitchI2caddressBF2    = 0x5f;
-constexpr auto cecI2cVersionRegisterBF2  = 0x9c;
+constexpr auto cecI2cVersionRegisterBF2  = 0x4;
+constexpr auto cecI2cAddressBF2          = 0x55;
+constexpr auto cecI2cBusBF2              = 0x7;
+
 constexpr auto cecI2cAddressBF3          = 0x52;
 constexpr auto cecI2cBusBF3              = 0xf;
 constexpr auto cecI2cVersionRegisterBF3  = 7;

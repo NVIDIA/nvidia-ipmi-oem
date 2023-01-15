@@ -116,7 +116,7 @@ namespace ipmi
         return ipmi::responseSuccess();
     } 
     
-    static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData,  bool SMBUS = false) {
+    static ipmi::Cc i2cTransactionBF(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData,  bool SMBUS = false) {
     std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
     int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
     if (i2cDev < 0)
@@ -173,7 +173,7 @@ namespace ipmi
             address = ipmi::nvidia::ethSwitchI2caddressBF2;
             bus =  ipmi::nvidia::ethSwitchI2cBusBF2;
         }       
-        auto ret_eth = i2cTransaction(bus, address, writeData, readBuf);
+        auto ret_eth = i2cTransactionBF(bus, address, writeData, readBuf);
         
         if (ret_eth != ipmi::ccSuccess)  {
             phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't disable 3 port eth switch");
@@ -232,7 +232,7 @@ namespace ipmi
                 ethSwitchI2caddress = ipmi::nvidia::ethSwitchI2caddressBF2;
                 ethSwitchI2cBus = ipmi::nvidia::ethSwitchI2cBusBF2;
             }       
-            auto ret_eth = i2cTransaction(ethSwitchI2cBus,ethSwitchI2caddress, writeData, readBuf);
+            auto ret_eth = i2cTransactionBF(ethSwitchI2cBus,ethSwitchI2caddress, writeData, readBuf);
             
             if (ret_eth != ipmi::ccSuccess)  {
                 phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't read the 3 port eth switch status");
@@ -409,11 +409,10 @@ namespace ipmi
         uint8_t address =  ipmi::nvidia::cecI2cAddressBF3;    
         if(bfModel != 3){
             SMBUS = false;
-            address =  ipmi::nvidia::cecI2cAddress;
-            readBuf.pop_back();
-            readBuf.pop_back(); 
+            address =  ipmi::nvidia::cecI2cAddressBF2;
+            
         }  
-        auto ret = i2cTransaction(bus, address, writeData, readBuf,SMBUS);
+        auto ret = i2cTransactionBF(bus, address, writeData, readBuf,SMBUS);
         if (ret != ipmi::ccSuccess) {
             log<level::ERR>("CEC version read failed",
                 phosphor::logging::entry("BUS=%d", bus));
@@ -426,7 +425,7 @@ namespace ipmi
     ipmi::RspType<uint8_t, std::vector<uint8_t>>ipmiGetFirmwareVersionCEC(uint8_t bfModel ) {
 
         if (bfModel == 2){
-            return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBus,ipmi::nvidia::cecI2cVersionRegisterBF2,bfModel);
+            return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBusBF2,ipmi::nvidia::cecI2cVersionRegisterBF2,bfModel);
         }
         else if (bfModel == 3){
             return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBusBF3,ipmi::nvidia::cecI2cVersionRegisterBF3,bfModel);
