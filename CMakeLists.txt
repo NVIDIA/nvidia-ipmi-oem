@@ -88,13 +88,13 @@ else()
                 src/oemcommands.cpp src/sensorcommands.cpp
                 src/storagecommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/BF2/oemcommands.cpp
-
+		src/BF/chassiscommands.cpp
     )
     elseif(BF3-OEM-COMMANDS)
     SET(flag_library_sources
                 src/oemcommands.cpp src/sensorcommands.cpp
                 src/storagecommands.cpp src/sbmr-bootprogress.cpp
-                src/BF/oemcommands.cpp
+                src/BF/oemcommands.cpp src/BF/chassiscommands.cpp
         )
     else()
     SET(flag_library_sources
@@ -144,10 +144,3 @@ target_compile_definitions (
     $<$<BOOL:${sbmr-boot-progress}>:
     -DFEATURE_SBMR_BOOTPROGRESS>
 )
-target_compile_definitions (
-    znvipmioemcmds PRIVATE
-    $<$<BOOL:${BF3-OEM-COMMANDS}>:
-    -DBF3-OEM-COMMANDS>
-)
-
-
