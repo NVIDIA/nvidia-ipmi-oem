@@ -22,6 +22,8 @@ option (sbmr-boot-progress
 option (GH-oem-commands
         "To support GH specific ipmi-oem-commands"
         OFF)
+
+
 option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
@@ -85,7 +87,7 @@ else()
     SET (flag_library_sources
                 src/oemcommands.cpp src/sensorcommands.cpp
                 src/storagecommands.cpp src/sbmr-bootprogress.cpp
-                src/BF/oemcommands.cpp
+                src/BF/oemcommands.cpp src/BF/BF2/oemcommands.cpp
 
     )
     elseif(BF3-OEM-COMMANDS)
@@ -147,8 +149,5 @@ target_compile_definitions (
     $<$<BOOL:${BF3-OEM-COMMANDS}>:
     -DBF3-OEM-COMMANDS>
 )
-target_compile_definitions (
-    znvipmioemcmds PRIVATE
-    $<$<BOOL:${BF3-OEM-COMMANDS}>:
-    -DBF3-OEM-COMMANDS>
-)
+
+
