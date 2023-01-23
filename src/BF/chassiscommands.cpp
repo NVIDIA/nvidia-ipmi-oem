@@ -55,33 +55,6 @@ int initiateHostStateTransition(ipmi::Context::ptr& ctx,
     return 0;
 }
 
-int updateRestartCause(ipmi::Context::ptr& ctx,
-                        State::Host::RestartCause newRestartCause)
-{
-    // Convert to string equivalent of the passed in transition enum.
-    auto request = State::convertForMessage(newRestartCause);
-
-    std::string service;
-    boost::system::error_code ec =
-        ipmi::getService(ctx, hostStateIntf, hostStatePath, service);
-    if (!ec)
-    {
-        ec = ipmi::setDbusProperty(ctx, service, hostStatePath, hostStateIntf,
-                                   "RestartCause", request);
-    }
-    if (ec)
-    {
-        phosphor::logging::log<level::ERR>("Failed to update RestartCause",
-                        entry("EXCEPTION=%s, REQUEST=%s", ec.message().c_str(),
-                              request.c_str()));
-        return -1;
-    }
-    phosphor::logging::log<level::ERR>(
-        "RestartCause update request initiated successfully",
-        entry("USERID=%d, REQUEST=%s", ctx->userId, request.c_str()));
-    return 0;
-}
-
 void registerChassisFunctions() __attribute__((constructor));
 
 namespace ipmi
@@ -111,11 +84,6 @@ ipmi::RspType<> ipmiChassisPowerBF(ipmi::Context::ptr& ctx,
 	        phosphor::logging::log<level::ERR>("Unsupported command");
             return ipmi::response(ipmi::ccResponseError);
         }
-    }
-
-    if (rc == 0)
-    {
-        rc = updateRestartCause(ctx, State::Host::RestartCause::RemoteCommand);
     }
 
     return ((rc < 0) ? ipmi::responseUnspecifiedError()
