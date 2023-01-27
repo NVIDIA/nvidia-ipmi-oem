@@ -437,13 +437,18 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
 }
 
 ipmi::RspType<uint8_t>
-ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t request)
+ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm, uint8_t request)
 {
     std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
                                         nvidia::fanZoneCtrlName1,
                                         nvidia::fanZoneCtrlName2};
     /* if not valid zone, return error */
     if (zone >= nvidia::fanZones) {
+        return ipmi::response(ipmi::ccInvalidFieldRequest);
+    }
+
+    /* if not valid pwm, return error */
+    if ((pwm > nvidia::pwm) || (pwm <= 0)) {
         return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
 
@@ -490,7 +495,7 @@ ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t request)
             }
             if (boost::ends_with(fullname, fanZoneHwMonNames[i])) {
                 ctrlPaths[i] = path.path();
-                ctrlPaths[i] += "/pwm1";
+                ctrlPaths[i] += "/pwm" + std::to_string(pwm);
                 break;
             }
         }
@@ -521,12 +526,14 @@ ipmi::RspType<uint8_t>
 ipmiSetAllFanZonesPWMDuty(uint8_t request)
 {
     for (int i = 0; i < nvidia::fanZones; i++) {
-        auto r = ipmiSetFanZonePWMDuty(i, request);
-        if (r != ipmi::responseSuccess()) {
-            phosphor::logging::log<level::ERR>(
-                "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
-            return r;
-        }
+	for(int j = 1; j <= nvidia::pwm; j++) {
+            auto r = ipmiSetFanZonePWMDuty(i, j, request);
+            if (r != ipmi::responseSuccess()) {
+                phosphor::logging::log<level::ERR>(
+                    "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
+                return r;
+            }
+	}
     }
     return ipmi::responseSuccess();;
 }

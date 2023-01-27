@@ -27,9 +27,10 @@ namespace nvidia
 constexpr auto fanServiceName               = "phosphor-pid-control";
 constexpr auto fanNoServiceSpeed            = 100;
 constexpr auto fanZones                     = 3;
+constexpr auto pwm                          = 6;
 constexpr auto fanZoneCtrlName0             = "";
-constexpr auto fanZoneCtrlName1             = "max31790@20";
-constexpr auto fanZoneCtrlName2             = "max31790@2c";
+constexpr auto fanZoneCtrlName1             = "max31790_1";
+constexpr auto fanZoneCtrlName2             = "max31790_2";
 
 constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor "
                                               "xyz.openbmc_project.externalsensor "
