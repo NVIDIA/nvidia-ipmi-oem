@@ -50,6 +50,9 @@ const char* sftVendorFieldModeService = "xyz.openbmc_project.Software.BMC.Vendor
 const char* vendorFieldModeBMCObj = "/xyz/openbmc_project/software/vendorfieldmode";
 std::string sftBMCVendorFieldModeIntf = "xyz.openbmc_project.Common.VendorFieldMode";
 
+const char* serialRedirectModeBMCObj = "/xyz/openbmc_project/software/serialredirectmode";
+std::string sftBMCSerialRedirectModeIntf = "xyz.openbmc_project.Common.SerialRedirectMode";
+
 //dbus names for interacting with systemd
 const char* systemdService = "org.freedesktop.systemd1";
 const char* systemdUnitIntf = "org.freedesktop.systemd1.Unit";
@@ -884,6 +887,23 @@ ipmi::RspType<> ipmiSetVendorFieldModeConfig(boost::asio::yield_context yield, u
 
         status = (setEnabled) ? true: false;
 
+        // Can't enable vendor field mode and serial redirect mode at the same time
+        // If serial redirect mode is enabled, disable it first.
+        if (status == true) {
+            sdbusp->yield_method_call<void>(
+                yield, ec,
+                sftVendorFieldModeService,
+                serialRedirectModeBMCObj,
+                sftBMCSerialRedirectModeIntf,
+                "SetSerialRedirectModeStatus",
+                false);
+            if (ec)
+            {
+                phosphor::logging::log<level::ERR>("Unspecified Error on BMC disabling serial redirect mode");
+                return ipmi::responseUnspecifiedError();
+            }
+        }
+
         sdbusp->yield_method_call<void>(
             yield, ec,
             sftVendorFieldModeService,
@@ -924,6 +944,102 @@ ipmi::RspType<uint8_t> ipmiGetVendorFieldModeConfig(boost::asio::yield_context y
                     vendorFieldModeBMCObj,
                     sftBMCVendorFieldModeIntf,
                     "IsVendorFieldModeEnabled");
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(status);
+}
+
+ipmi::RspType<> ipmiSetSerialRedirectModeConfig(boost::asio::yield_context yield, uint8_t setEnabled)
+{
+
+    /*
+     * BMC set serial redirect mode is used to set the state of
+     * serial redirect mode in the dbus.
+     * State can be either Enabled if the status is set to true,
+     * or Disbaled if the status is set to false.
+     */
+    /*
+     * Request data:
+     * Byte 1:
+     *   00 -> Disable Serial Redirect Mode
+     *   01 -> Enable Serial Redirect Mode
+    */
+
+    auto sdbusp = getSdBus();
+    boost::system::error_code ec;
+
+    try
+    {
+        bool status{false};
+
+        if (setEnabled != 0x00 && setEnabled != 0x01)
+        {
+            return ipmi::response(ipmi::ccInvalidFieldRequest);
+        }
+
+        status = (setEnabled) ? true: false;
+
+        // Can't enable vendor field mode and serial redirect mode at the same time
+        // If vendor field mode is enabled, disable it first.
+        if (status == true) {
+            sdbusp->yield_method_call<void>(
+                yield, ec,
+                sftVendorFieldModeService,
+                vendorFieldModeBMCObj,
+                sftBMCVendorFieldModeIntf,
+                "SetVendorFieldModeStatus",
+                false);
+            if (ec)
+            {
+                phosphor::logging::log<level::ERR>("Unspecified Error on BMC disabling vendor field mode");
+                return ipmi::responseUnspecifiedError();
+            }
+        }
+
+        sdbusp->yield_method_call<void>(
+            yield, ec,
+            sftVendorFieldModeService,
+            serialRedirectModeBMCObj,
+            sftBMCSerialRedirectModeIntf,
+            "SetSerialRedirectModeStatus",
+            status);
+
+        if (ec)
+        {
+            phosphor::logging::log<level::ERR>("Unspecified Error on BMC set serial redirect mode");
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess();
+}
+
+ipmi::RspType<uint8_t> ipmiGetSerialRedirectModeConfig(boost::asio::yield_context yield)
+{
+    /*
+     * Response data:
+     * Byte 1    : 0x01 if serial redirect mode set Enabled or 0x00.
+    */
+
+    auto sdbusp = getSdBus();
+    boost::system::error_code ec;
+    bool status = false;
+    try
+    {
+        status = sdbusp->yield_method_call<bool>(
+                    yield, ec,
+                    sftVendorFieldModeService,
+                    serialRedirectModeBMCObj,
+                    sftBMCSerialRedirectModeIntf,
+                    "IsSerialRedirectModeEnabled");
     }
     catch (...)
     {
@@ -4128,11 +4244,27 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdSetMaxPMaxQConfiguration,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiOemSetMaxPMaxQConfiguration);
-    
-   
- 
-    
-    
+
+    // <Get Serial Redirect Mode Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetSerialRedirectModeConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdGetSerialRedirectModeConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiGetSerialRedirectModeConfig);
+
+    // <Set Serial Redirect Mode Config>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetSerialRedirectModeConfig));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSetSerialRedirectModeConfig,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSetSerialRedirectModeConfig);
+
     return;
 
 

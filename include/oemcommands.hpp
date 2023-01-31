@@ -39,6 +39,8 @@ constexpr auto cmdGetBiosPostStatus = 0x25;
 constexpr auto cmdGetBiosPostCode = 0xE9;
 constexpr auto cmdI2CMasterReadWrite = 0x81;
 constexpr auto cmdGetBiosPostCodeToIpmiMaxSize = 945;
+constexpr auto cmdSetSerialRedirectModeConfig = 0x6D;
+constexpr auto cmdGetSerialRedirectModeConfig = 0x6E;
 
 } // namespace app
 
