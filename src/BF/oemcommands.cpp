@@ -441,12 +441,6 @@ namespace ipmi
         int response;
         switch(resetOption)
         {
-            case 0x00: // soc hard reset
-                response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "soc_hard_reset");
-                break;
-            case 0x01: // arm hard reset - nsrst
-                response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "arm_hard_reset");
-                break;
             case 0x02: // arm soft reset
                 response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "arm_soft_reset");
                 break;
