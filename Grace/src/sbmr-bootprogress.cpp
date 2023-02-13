@@ -193,8 +193,18 @@ ipmi::RspType<uint8_t> ipmiOemSbmrSendDescription(
             {
                 eventMessage += "Uncontained ";
             }
-            eventSeverity.assign(
-                "xyz.openbmc_project.Logging.Entry.Level.Error");
+
+            if (severity == bootErrorMinor)
+            {
+                eventSeverity.assign(
+                    "xyz.openbmc_project.Logging.Entry.Level.Warning");
+            }
+            else
+            {
+                eventSeverity.assign(
+                    "xyz.openbmc_project.Logging.Entry.Level.Error");
+            }
+
             break;
         case bootDebugCode:
             eventMessage.assign("Debug Code ");
