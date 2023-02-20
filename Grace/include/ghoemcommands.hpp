@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 namespace ipmi
@@ -64,10 +65,24 @@ constexpr auto cmdGetUsbDescription = 0x30;
 constexpr auto cmdGetUsbSerialNum = 0x31;
 constexpr auto cmdGetRedfishHostName = 0x32;
 constexpr auto cmdGetipmiChannelRfHi = 0x33;
-constexpr auto cmdGetBootStrapAcc = 0x02;
 constexpr auto cmdGetRedfishServiceUuid = 0x34;
 constexpr auto cmdGetRedfishServicePort = 0x35;
+constexpr auto cmdSetBiosPassword = 0x36;
+constexpr auto cmdGetBiosPassword = 0x37;
 constexpr auto cmdGetManagerCertFingerPrint = 0x01;
+constexpr auto cmdGetBootStrapAcc = 0x02;
+
+// BiosPassword
+constexpr char biosPasswordFilePath[] =
+    "/var/lib/bios-settings-manager/seedData";
+constexpr int biosPasswordIter = 1000;
+constexpr uint8_t biosPasswordSaltSize = 32;
+constexpr uint8_t biosPasswordMaxHashSize = 64;
+constexpr uint8_t biosPasswordSelectorAdmin = 0x01;
+constexpr uint8_t biosPasswordTypeNoChange = 0x00;
+constexpr uint8_t biosPasswordTypeNoPassowrd = 0x01;
+constexpr uint8_t biosPasswordTypePbkdf2Sha256 = 0x02;
+constexpr uint8_t biosPasswordTypePbkdf2Sha384 = 0x03;
 
 } // namespace misc
 namespace chassis
