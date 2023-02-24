@@ -1,6 +1,6 @@
 /**
  * Copyright © 2022 NVIDIA Corporation
- * 
+ *
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
@@ -15,8 +15,8 @@
 
  */
 #include "ghoemcommands.hpp"
+
 #include "gh-config.hpp"
-#include <nlohmann/json.hpp>
 
 #include <bits/stdc++.h>
 #include <fcntl.h>
@@ -33,6 +33,7 @@
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
+#include <nlohmann/json.hpp>
 #include <phosphor-logging/elog-errors.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/bus.hpp>
@@ -56,7 +57,8 @@ static constexpr uint16_t USB_PRODUCT_ID = 0xA4A2;
 static constexpr uint8_t USB_SERIAL_NUM = 0x00;
 
 // GPU smbpbi object in dbus
-static constexpr const char* gpuSMBPBIIntf = "xyz.openbmc_project.GpuMgr.Server";
+static constexpr const char* gpuSMBPBIIntf =
+    "xyz.openbmc_project.GpuMgr.Server";
 static constexpr const char* gpuSMBPBIPath = "/xyz/openbmc_project/GpuMgr";
 
 // BMC state object in dbus
@@ -64,7 +66,6 @@ static constexpr const char* bmcStateIntf = "xyz.openbmc_project.State.BMC";
 static constexpr const char* currentBmcStateProp = "CurrentBMCState";
 static constexpr const char* bmcStateReadyStr =
     "xyz.openbmc_project.State.BMC.BMCState.Ready";
-
 
 // SEL policy in dbus
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
@@ -113,7 +114,6 @@ std::string defaultCertPath = "/etc/ssl/certs/https/server.pem";
 
 static constexpr const char* persistentDataFilePath =
     "/home/root/bmcweb_persistent_data.json";
-    
 
 void registerNvOemFunctions() __attribute__((constructor));
 
@@ -121,7 +121,7 @@ using namespace phosphor::logging;
 
 using GetSubTreeType = std::vector<
     std::pair<std::string,
-        std::vector<std::pair<std::string, std::vector<std::string>>>>>;
+              std::vector<std::pair<std::string, std::vector<std::string>>>>>;
 using GetSubTreePathsType = std::vector<std::string>;
 using BasicVariantType = std::variant<std::string>;
 using PropertyMapType =
@@ -133,23 +133,21 @@ namespace ipmi
 // HI Certificate FingerPrint error code
 static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
 static constexpr Cc ipmiCCCertificateNumberInvalid = 0xCB;
-	
-ipmi::RspType<
-    uint8_t,  // Major Version
-    uint8_t  // Minor Version
-    > ipmiGetOEMVersion()
+
+ipmi::RspType<uint8_t, // Major Version
+              uint8_t  // Minor Version
+              >
+    ipmiGetOEMVersion()
 {
     return ipmi::responseSuccess(OEM_MAJOR_VER, OEM_MINOR_VER);
 }
 
-ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
-    uint8_t, uint8_t, uint8_t, uint8_t, uint8_t> ipmiSMBPBIPassthroughCmd(
-    uint8_t param, // GPU device : 0x01 fixed
-    uint8_t deviceId,
-    uint8_t opcode,
-    uint8_t arg1,
-    uint8_t arg2,
-    uint8_t execute // Execute bit : 0x80 fixed
+ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
+              uint8_t, uint8_t>
+    ipmiSMBPBIPassthroughCmd(uint8_t param, // GPU device : 0x01 fixed
+                             uint8_t deviceId, uint8_t opcode, uint8_t arg1,
+                             uint8_t arg2,
+                             uint8_t execute // Execute bit : 0x80 fixed
     )
 {
     /*
@@ -184,14 +182,14 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
     }
     if (execute != 0x80)
     {
-        phosphor::logging::log<level::ERR>(
-            "ipmiSMBPBIPassthroughCmd: Not an smpbi passthrough command request");
+        phosphor::logging::log<level::ERR>("ipmiSMBPBIPassthroughCmd: Not an "
+                                           "smpbi passthrough command request");
         return ipmi::responseResponseError();
     }
     // Call smpbi passthrough call
     int rc;
     std::vector<uint32_t> dataOut;
-    std::tuple <int, std::vector<uint32_t>> smbpbiRes;
+    std::tuple<int, std::vector<uint32_t>> smbpbiRes;
     std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
     std::string service = ipmi::getService(*bus, gpuSMBPBIIntf, gpuSMBPBIPath);
     auto method = bus->new_method_call(service.c_str(), gpuSMBPBIPath,
@@ -219,7 +217,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
     }
 
     reply.read(smbpbiRes);
-    std::tie (rc, dataOut) = smbpbiRes;
+    std::tie(rc, dataOut) = smbpbiRes;
     if (dataOut.size() != 4)
     {
         phosphor::logging::log<level::ERR>(
@@ -250,10 +248,9 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
     res[2] = dataVal >> 16;
     res[3] = dataVal >> 24;
 
-    return ipmi::responseSuccess(deviceId, retOpcode, retArg1, retArg2,
-        status, res[0], res[1], res[2], res[3]);
+    return ipmi::responseSuccess(deviceId, retOpcode, retArg1, retArg2, status,
+                                 res[0], res[1], res[2], res[3]);
 }
-
 
 template <typename... ArgTypes>
 static int executeCmd(const char* path, ArgTypes&&... tArgs)
@@ -263,47 +260,53 @@ static int executeCmd(const char* path, ArgTypes&&... tArgs)
     return execProg.exit_code();
 }
 
-
-
-ipmi::RspType<uint8_t>
-ipmiBF2ResetControl(uint8_t resetOption)
+ipmi::RspType<uint8_t> ipmiBF2ResetControl(uint8_t resetOption)
 {
     int response;
-    switch(resetOption)
+    switch (resetOption)
     {
         case 0x00: // soc hard reset
-            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "soc_hard_reset");
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control",
+                                  "soc_hard_reset");
             break;
         case 0x01: // arm hard reset - nsrst
-            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "arm_hard_reset");
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control",
+                                  "arm_hard_reset");
             break;
         case 0x02: // arm soft reset
-            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "arm_soft_reset");
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control",
+                                  "arm_soft_reset");
             break;
         case 0x03: // tor eswitch reset
-            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "do_tor_eswitch_reset");
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control",
+                                  "do_tor_eswitch_reset");
             break;
         case 0x04: // arm hard reset - nsrst - secondary DPU
-            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "bf2_nic_bmc_ctrl1");
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control",
+                                  "bf2_nic_bmc_ctrl1");
             break;
         case 0x05: // arm soft reset - secondary DPU
-            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control", "bf2_nic_bmc_ctrl0");
+            response = executeCmd("/usr/sbin/mlnx_bf2_reset_control",
+                                  "bf2_nic_bmc_ctrl0");
             break;
         default:
             return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
 
-    if(response)
+    if (response)
     {
         log<level::ERR>("Reset Command failed.",
-                phosphor::logging::entry("rc= %d", response));
+                        phosphor::logging::entry("rc= %d", response));
         return ipmi::response(ipmi::ccResponseError);
     }
 
     return ipmi::response(ipmi::ccSuccess);
 }
 
-static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData) {
+static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr,
+                               std::vector<uint8_t>& wrData,
+                               std::vector<uint8_t>& rdData)
+{
     std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
 
     int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
@@ -313,25 +316,21 @@ static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8
                         phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
         return ipmi::ccInvalidFieldRequest;
     }
-    std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
+    std::shared_ptr<int> scopeGuard(&i2cDev, [](int* p) { ::close(*p); });
 
     auto ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
-    if (ret != ipmi::ccSuccess) {
+    if (ret != ipmi::ccSuccess)
+    {
         log<level::ERR>("Failed to perform I2C transaction!");
     }
     return ret;
 }
 
-
-
-ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
-    uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
-    uint8_t, uint8_t, uint8_t, uint8_t> ipmiSMBPBIPassthroughExtendedCmd(
-    uint8_t deviceId,
-    uint8_t opcode,
-    uint8_t arg1,
-    uint8_t arg2,
-    uint8_t execute // Execute bit : 0x1f fixed
+ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
+              uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
+    ipmiSMBPBIPassthroughExtendedCmd(uint8_t deviceId, uint8_t opcode,
+                                     uint8_t arg1, uint8_t arg2,
+                                     uint8_t execute // Execute bit : 0x1f fixed
     )
 {
     /*
@@ -361,13 +360,14 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
     if (execute != 0x1f)
     {
         phosphor::logging::log<level::ERR>(
-            "ipmiSMBPBIPassthroughExtendedCmd: Not an smpbi passthrough extended command request");
+            "ipmiSMBPBIPassthroughExtendedCmd: Not an smpbi passthrough "
+            "extended command request");
         return ipmi::responseResponseError();
     }
     // Call smpbi passthrough call
     int rc;
     std::vector<uint32_t> dataOut;
-    std::tuple <int, std::vector<uint32_t>> smbpbiRes;
+    std::tuple<int, std::vector<uint32_t>> smbpbiRes;
     std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
     std::string service = ipmi::getService(*bus, gpuSMBPBIIntf, gpuSMBPBIPath);
     auto method = bus->new_method_call(service.c_str(), gpuSMBPBIPath,
@@ -388,14 +388,15 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
     if (reply.is_method_error())
     {
         phosphor::logging::log<level::ERR>(
-            "ipmiSMBPBIPassthroughExtendedCmd: Passthrough method returned error",
+            "ipmiSMBPBIPassthroughExtendedCmd: Passthrough method returned "
+            "error",
             phosphor::logging::entry("SERVICE=%s", service.c_str()),
             phosphor::logging::entry("PATH=%s", gpuSMBPBIPath));
         return ipmi::responseUnspecifiedError();
     }
 
     reply.read(smbpbiRes);
-    std::tie (rc, dataOut) = smbpbiRes;
+    std::tie(rc, dataOut) = smbpbiRes;
     if (dataOut.size() != 4)
     {
         phosphor::logging::log<level::ERR>(
@@ -432,40 +433,46 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t,
     extRes[2] = extDataVal >> 16;
     extRes[3] = extDataVal >> 24;
 
-    return ipmi::responseSuccess(deviceId, retOpcode, retArg1, retArg2,
-        status, res[0], res[1], res[2], res[3], extRes[0], extRes[1], extRes[2], extRes[3]);
+    return ipmi::responseSuccess(deviceId, retOpcode, retArg1, retArg2, status,
+                                 res[0], res[1], res[2], res[3], extRes[0],
+                                 extRes[1], extRes[2], extRes[3]);
 }
 
-ipmi::RspType<uint8_t>
-ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm, uint8_t request)
+ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
+                                             uint8_t request)
 {
     std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
-                                        nvidia::fanZoneCtrlName1,
-                                        nvidia::fanZoneCtrlName2};
+                                       nvidia::fanZoneCtrlName1,
+                                       nvidia::fanZoneCtrlName2};
     /* if not valid zone, return error */
-    if (zone >= nvidia::fanZones) {
+    if (zone >= nvidia::fanZones)
+    {
         return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
 
     /* if not valid pwm, return error */
-    if ((pwm > nvidia::pwm) || (pwm <= 0)) {
+    if ((pwm > nvidia::pwm) || (pwm <= 0))
+    {
         return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
 
     /* if zone control namae is blank, return success */
-    if (fanZoneHwMonNames[zone].length() == 0) {
+    if (fanZoneHwMonNames[zone].length() == 0)
+    {
         return ipmi::responseSuccess();
     }
 
     /* get the control paths for the fans */
     std::array<std::string, nvidia::fanZones> ctrlPaths = {"", "", ""};
     std::filesystem::path hwmonPath("/sys/class/hwmon/");
-    for (auto const& path : std::filesystem::directory_iterator{hwmonPath}) {
+    for (auto const& path : std::filesystem::directory_iterator{hwmonPath})
+    {
         /* get the name from this hwmon path */
         std::filesystem::path namePath = path;
         namePath /= "uevent";
         std::ifstream nameFile(namePath);
-        if (!nameFile.is_open()) {
+        if (!nameFile.is_open())
+        {
             phosphor::logging::log<level::ERR>(
                 "ipmiSetFanZonePWMDuty: Failed to open hwmon name file");
             continue;
@@ -473,27 +480,34 @@ ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm, uint8_t request)
         /* use uevent interface to get pull name, which includes address for i2c
             devices */
         std::string fullname;
-        while (!nameFile.eof()) {
+        while (!nameFile.eof())
+        {
             std::string l;
             nameFile >> l;
-            if (boost::starts_with(l, "OF_FULLNAME")) {
+            if (boost::starts_with(l, "OF_FULLNAME"))
+            {
                 fullname = l;
             }
         }
 
-        if (fullname.length() == 0) {
+        if (fullname.length() == 0)
+        {
             continue;
         }
 
         /* now iterate through HwMon expected names and find a match */
-        for (int i = 0; i < nvidia::fanZones; i++) {
-            if (fanZoneHwMonNames[i].length() == 0) {
+        for (int i = 0; i < nvidia::fanZones; i++)
+        {
+            if (fanZoneHwMonNames[i].length() == 0)
+            {
                 continue;
             }
-            if (ctrlPaths[i].length() != 0) {
+            if (ctrlPaths[i].length() != 0)
+            {
                 continue;
             }
-            if (boost::ends_with(fullname, fanZoneHwMonNames[i])) {
+            if (boost::ends_with(fullname, fanZoneHwMonNames[i]))
+            {
                 ctrlPaths[i] = path.path();
                 ctrlPaths[i] += "/pwm" + std::to_string(pwm);
                 break;
@@ -502,59 +516,68 @@ ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm, uint8_t request)
     }
 
     /* convert control % to a pwm value */
-	int value = 255;
-    if ((request%10 == 0) && (request <= 100) && (request >= 20))
+    int value = 255;
+    if ((request % 10 == 0) && (request <= 100) && (request >= 20))
     {
-        value = value*request/100;
+        value = value * request / 100;
         std::ofstream ofs(ctrlPaths[zone]);
         if (!ofs.is_open())
         {
-             phosphor::logging::log<level::ERR>(
+            phosphor::logging::log<level::ERR>(
                 "ipmiSetFanZonePWMDuty: Failed to open hwmon pwm file");
-             return ipmi::response(ipmi::ccResponseError);
+            return ipmi::response(ipmi::ccResponseError);
         }
         ofs << value;
         ofs.close();
         return ipmi::responseSuccess();
     }
-    else {
+    else
+    {
         return ipmi::response(ipmi::ccInvalidFieldRequest);
     }
 }
 
-ipmi::RspType<uint8_t>
-ipmiSetAllFanZonesPWMDuty(uint8_t request)
+ipmi::RspType<uint8_t> ipmiSetAllFanZonesPWMDuty(uint8_t request)
 {
-    for (int i = 0; i < nvidia::fanZones; i++) {
-	for(int j = 1; j <= nvidia::pwm; j++) {
+    for (int i = 0; i < nvidia::fanZones; i++)
+    {
+        for (int j = 1; j <= nvidia::pwm; j++)
+        {
             auto r = ipmiSetFanZonePWMDuty(i, j, request);
-            if (r != ipmi::responseSuccess()) {
+            if (r != ipmi::responseSuccess())
+            {
                 phosphor::logging::log<level::ERR>(
                     "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
                 return r;
             }
-	}
+        }
     }
-    return ipmi::responseSuccess();;
+    return ipmi::responseSuccess();
+    ;
 }
 
-ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode) {
-    if (mode == 0x00) {
+ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)
+{
+    if (mode == 0x00)
+    {
         /* auto mode startup the fan control service */
         std::string startupFanString = "systemctl start ";
         startupFanString += nvidia::fanServiceName;
         auto r = system(startupFanString.c_str());
-        if (r != 0) {
+        if (r != 0)
+        {
             /* log that the fan control service doesn't exist */
             phosphor::logging::log<level::ERR>(
-                "ipmiSetFanControl: failed to start auto fan service, falling back to default speed");
+                "ipmiSetFanControl: failed to start auto fan service, falling "
+                "back to default speed");
             /* set fans to default speed, we will support this as "auto", so we
                 still return success via ipmi */
             return ipmiSetAllFanZonesPWMDuty(nvidia::fanNoServiceSpeed);
         }
         return ipmi::responseSuccess();
     }
-    else if (mode == 0x01) {
+    else if (mode == 0x01)
+    {
         /* manual mode, stop fan service */
         std::string stopFanString = "systemctl stop ";
         stopFanString += nvidia::fanServiceName;
@@ -566,153 +589,179 @@ ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode) {
     return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
-ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode) {
-    if (mode == 0x00) {
+ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
+{
+    if (mode == 0x00)
+    {
         /* stop services that scan sensors */
         std::string stopSensorScan = "systemctl stop ";
         stopSensorScan += nvidia::sensorScanSerivcesList;
         auto r = system(stopSensorScan.c_str());
-	if (r != 0) {
-	    /* log that the stop failed */
+        if (r != 0)
+        {
+            /* log that the stop failed */
             phosphor::logging::log<level::ERR>(
-	        "ipmiSensorScanEnableDisable: failed to stop services");
-	    return ipmi::responseResponseError();
-	}
-	return ipmi::responseSuccess();
+                "ipmiSensorScanEnableDisable: failed to stop services");
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess();
     }
-    else if (mode == 0x01) {
+    else if (mode == 0x01)
+    {
         /* start services */
-	std::string startSensorScan = "systemctl start ";
-	startSensorScan += nvidia::sensorScanSerivcesList;
-	auto r = system(startSensorScan.c_str());
+        std::string startSensorScan = "systemctl start ";
+        startSensorScan += nvidia::sensorScanSerivcesList;
+        auto r = system(startSensorScan.c_str());
 
-	if (r != 0) {
-	    /* log that the stop failed */
-	    phosphor::logging::log<level::ERR>(
-	        "ipmiSensorScanEnableDisable: failed to start services");
-	    return ipmi::responseResponseError();
-	}
-	return ipmi::responseSuccess();
+        if (r != 0)
+        {
+            /* log that the stop failed */
+            phosphor::logging::log<level::ERR>(
+                "ipmiSensorScanEnableDisable: failed to start services");
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess();
     }
     return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
-static uint8_t getSSDLedRegister(uint8_t type, uint8_t instance, uint8_t &offset, uint8_t &mask) {
+static uint8_t getSSDLedRegister(uint8_t type, uint8_t instance,
+                                 uint8_t& offset, uint8_t& mask)
+{
     using namespace ipmi::nvidia::misc;
     uint8_t reg = 0;
     offset = instance;
     mask = (1 << instance);
-    switch (type) {
+    switch (type)
+    {
         case getSSDLedTypeReadyMove:
             reg = nvidia::fpgaMidSSDLedReadyMove;
-        break;
+            break;
         case getSSDLedTypeActivity:
             reg = nvidia::fpgaMidSSDLedActivity;
-        break;
+            break;
         case getSSDLedTypeFault:
             /*  offset 0 = instance 7, 6
                 offset 1 = instance 5, 4
                 offset 2 = instance 3, 2
                 offset 3 = instance 1, 0 */
-            reg = nvidia::fpgaMidSSDLedFaultBase + (((getSSDLedNLed - 1) - instance) >> 1);
+            reg = nvidia::fpgaMidSSDLedFaultBase +
+                  (((getSSDLedNLed - 1) - instance) >> 1);
             /*  each register is:
                     xxbb baaa
                 where aaa is 0 and bbb is 1 */
             offset = nvidia::fpgaMidSSDLedFaultWidth * (instance & 0x01);
             mask = ((1 << nvidia::fpgaMidSSDLedFaultWidth) - 1) << offset;
-        break;
+            break;
     }
     return reg;
 }
 
-ipmi::RspType<uint8_t> ipmiOemGetSSDLed(uint8_t type, uint8_t instance) {
+ipmi::RspType<uint8_t> ipmiOemGetSSDLed(uint8_t type, uint8_t instance)
+{
     using namespace ipmi::nvidia::misc;
 
-    if (instance >= getSSDLedNLed) {
+    if (instance >= getSSDLedNLed)
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Invalid SSD LED Instance");
+            "Invalid SSD LED Instance");
         return ipmi::responseResponseError();
     }
 
     /* get register, offset, mask information */
     uint8_t reg, offset, mask;
     reg = getSSDLedRegister(type, instance, offset, mask);
-    if (reg == 0) {
+    if (reg == 0)
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Invalid SSD LED type");
         return ipmi::responseResponseError();
     }
 
     /* get appropriate register */
-    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> writeData = {reg};
     std::vector<uint8_t> readBuf(1);
-    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress, writeData, readBuf);
-    if (ret != ipmi::ccSuccess) {
+    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress,
+                              writeData, readBuf);
+    if (ret != ipmi::ccSuccess)
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Failed to get SSD Led status from FPGA");
-            return ipmi::responseResponseError();
+            "Failed to get SSD Led status from FPGA");
+        return ipmi::responseResponseError();
     }
 
     /* decode and return */
     return ipmi::responseSuccess(readBuf[0] & mask >> offset);
 }
 
-ipmi::RspType<> ipmiOemSetSSDLed(uint8_t type, uint8_t instance, uint8_t pattern) {
+ipmi::RspType<> ipmiOemSetSSDLed(uint8_t type, uint8_t instance,
+                                 uint8_t pattern)
+{
     using namespace ipmi::nvidia::misc;
 
-    if ((instance >= getSSDLedNLed)||
-        ((type == getSSDLedTypeFault)&&(pattern > nvidia::fpgaMidSetLedFaultMaxPattern))||
-        ((type != getSSDLedTypeFault)&&(pattern > nvidia::fpgaMidSetLedOtherMaxPattern))||
-        (type == getSSDLedTypeActivity)) {
+    if ((instance >= getSSDLedNLed) ||
+        ((type == getSSDLedTypeFault) &&
+         (pattern > nvidia::fpgaMidSetLedFaultMaxPattern)) ||
+        ((type != getSSDLedTypeFault) &&
+         (pattern > nvidia::fpgaMidSetLedOtherMaxPattern)) ||
+        (type == getSSDLedTypeActivity))
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Invalid SSD LED Type, Instance or Pattern");
+            "Invalid SSD LED Type, Instance or Pattern");
         return ipmi::responseResponseError();
     }
 
     /* get register, offset, mask information */
     uint8_t reg, offset, mask;
     reg = getSSDLedRegister(type, instance, offset, mask);
-    if (reg == 0) {
+    if (reg == 0)
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Invalid SSD LED type");
         return ipmi::responseResponseError();
     }
 
     /* get appropriate register */
-    std::vector<uint8_t> writeData={reg};
+    std::vector<uint8_t> writeData = {reg};
     std::vector<uint8_t> readBuf(1);
-    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress, writeData, readBuf);
-    if (ret != ipmi::ccSuccess) {
+    auto ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress,
+                              writeData, readBuf);
+    if (ret != ipmi::ccSuccess)
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Failed to get SSD Led status from FPGA");
-            return ipmi::responseResponseError();
+            "Failed to get SSD Led status from FPGA");
+        return ipmi::responseResponseError();
     }
 
     /* adjust register and write it out */
     writeData.push_back((readBuf[0] & ~mask) | (pattern << offset));
-    ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress, writeData, readBuf);
-    if (ret != ipmi::ccSuccess) {
+    ret = i2cTransaction(nvidia::fpgaMidI2cBus, nvidia::fpgaI2cAddress,
+                         writeData, readBuf);
+    if (ret != ipmi::ccSuccess)
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Failed to set SSD Led pattern to FPGA");
-            return ipmi::responseResponseError();
+            "Failed to set SSD Led pattern to FPGA");
+        return ipmi::responseResponseError();
     }
 
     return ipmi::responseSuccess();
 }
 
-ipmi::RspType<uint8_t> ipmiOemGetLedStatus(uint8_t type) {
+ipmi::RspType<uint8_t> ipmiOemGetLedStatus(uint8_t type)
+{
     using namespace ipmi::nvidia::misc;
     std::string ledPath = "/sys/class/leds/";
-    switch (type) {
+    switch (type)
+    {
         case getLedStatusPowerLed:
             ledPath += nvidia::powerLedName;
-        break;
+            break;
         case getLedStatusFaultLed:
             ledPath += nvidia::faultLedName;
-        break;
+            break;
         case getLedStatusMotherBoardLed:
             ledPath += nvidia::mbLedName;
-        break;
+            break;
         default:
             phosphor::logging::log<phosphor::logging::level::ERR>(
                 "Unknown LED type requested");
@@ -722,29 +771,31 @@ ipmi::RspType<uint8_t> ipmiOemGetLedStatus(uint8_t type) {
     /* have path to led, open brightness and check if it is 0 */
     int brightness;
     std::ifstream ledBrightness(ledPath + "/brightness");
-    if (!ledBrightness.is_open()) {
+    if (!ledBrightness.is_open())
+    {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Unable to open LED brightness file");
+            "Unable to open LED brightness file");
         return ipmi::responseResponseError();
     }
     ledBrightness >> brightness;
     ledBrightness.close();
-    if (brightness != 0) {
+    if (brightness != 0)
+    {
         return ipmi::responseSuccess(1);
     }
     return ipmi::responseSuccess(0);
 }
 
-
-ipmi::RspType<std::vector<uint8_t>> ipmiI2CMasterReadWrite(
-	                                        uint8_t bus,
-	                                        uint8_t slaveAddr,
-	                                        uint8_t readCount,
-	                                        std::vector<uint8_t> writeData) {
+ipmi::RspType<std::vector<uint8_t>>
+    ipmiI2CMasterReadWrite(uint8_t bus, uint8_t slaveAddr, uint8_t readCount,
+                           std::vector<uint8_t> writeData)
+{
     std::vector<uint8_t> rdData(readCount);
-    /* slaveaddr is expected to be in 8bit format, i2cTransaction expects 7bit */
+    /* slaveaddr is expected to be in 8bit format, i2cTransaction expects 7bit
+     */
     auto ret = i2cTransaction(bus, slaveAddr >> 1, writeData, rdData);
-    if (ret != ipmi::ccSuccess) {
+    if (ret != ipmi::ccSuccess)
+    {
         return ipmi::response(ret);
     }
     return ipmi::responseSuccess(rdData);
@@ -758,18 +809,16 @@ ipmi::RspType<uint8_t> ipmiGetSELPolicy()
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
     try
     {
-        auto service =
-            ipmi::getService(*dbus, selLogIntf, selLogObj);
-        auto policy =
-            ipmi::getDbusProperty(*dbus, service, selLogObj,
-                selLogIntf, "SelPolicy");
+        auto service = ipmi::getService(*dbus, selLogIntf, selLogObj);
+        auto policy = ipmi::getDbusProperty(*dbus, service, selLogObj,
+                                            selLogIntf, "SelPolicy");
         if (std::get<std::string>(policy) ==
             "xyz.openbmc_project.Logging.Settings.Policy.Linear")
         {
             return ipmi::responseSuccess(static_cast<uint8_t>(0));
         }
         else if (std::get<std::string>(policy) ==
-           "xyz.openbmc_project.Logging.Settings.Policy.Circular")
+                 "xyz.openbmc_project.Logging.Settings.Policy.Circular")
         {
             return ipmi::responseSuccess(static_cast<uint8_t>(1));
         }
@@ -797,11 +846,9 @@ ipmi::RspType<> ipmiSetSELPolicy(uint8_t policyType)
     try
     {
         // Read current policy
-        auto service =
-            ipmi::getService(*dbus, selLogIntf, selLogObj);
-        auto policy =
-            ipmi::getDbusProperty(*dbus, service, selLogObj,
-                selLogIntf, "SelPolicy");
+        auto service = ipmi::getService(*dbus, selLogIntf, selLogObj);
+        auto policy = ipmi::getDbusProperty(*dbus, service, selLogObj,
+                                            selLogIntf, "SelPolicy");
 
         switch (policyType)
         {
@@ -810,9 +857,10 @@ ipmi::RspType<> ipmiSetSELPolicy(uint8_t policyType)
                 if (std::get<std::string>(policy) !=
                     "xyz.openbmc_project.Logging.Settings.Policy.Linear")
                 {
-                    ipmi::setDbusProperty(*dbus, service, selLogObj,
-                        selLogIntf, "SelPolicy",
-                        std::string("xyz.openbmc_project.Logging.Settings.Policy.Linear"));
+                    ipmi::setDbusProperty(
+                        *dbus, service, selLogObj, selLogIntf, "SelPolicy",
+                        std::string("xyz.openbmc_project.Logging.Settings."
+                                    "Policy.Linear"));
                 }
                 break;
             case 1:
@@ -820,16 +868,16 @@ ipmi::RspType<> ipmiSetSELPolicy(uint8_t policyType)
                 if (std::get<std::string>(policy) !=
                     "xyz.openbmc_project.Logging.Settings.Policy.Circular")
                 {
-                    ipmi::setDbusProperty(*dbus, service, selLogObj,
-                        selLogIntf, "SelPolicy",
-                        std::string("xyz.openbmc_project.Logging.Settings.Policy.Circular"));
+                    ipmi::setDbusProperty(
+                        *dbus, service, selLogObj, selLogIntf, "SelPolicy",
+                        std::string("xyz.openbmc_project.Logging.Settings."
+                                    "Policy.Circular"));
                 }
                 break;
             default:
                 phosphor::logging::log<phosphor::logging::level::ERR>(
                     "SEL policy: invalid type!",
-                    phosphor::logging::entry(
-                        "Request Value=%d", policyType));
+                    phosphor::logging::entry("Request Value=%d", policyType));
                 return ipmi::responseResponseError();
                 break;
         }
@@ -844,7 +892,6 @@ ipmi::RspType<> ipmiSetSELPolicy(uint8_t policyType)
 
     return ipmi::responseSuccess();
 }
-
 
 ipmi::RspType<uint8_t, uint8_t> ipmiGetUsbDescription(uint8_t type)
 {
@@ -1472,10 +1519,6 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     }
 }
 
-
-
-
-
 ipmi::RspType<std::vector<uint8_t>>
     ipmiGetManagerCertFingerPrint(ipmi::Context::ptr ctx, uint8_t certNum)
 {
@@ -1550,20 +1593,16 @@ ipmi::RspType<std::vector<uint8_t>>
     }
 }
 
-
 ipmi::RspType<> ipmiOemSoftReboot()
 {
     /* TODO: Should be handled by dbus call once backend exists */
     /* call powerctrl grace_off to trigger soft off */
     system("powerctrl grace_off");
-    /* call powerctrl for power cycle, this will force off if the grace off didn't occur */
+    /* call powerctrl for power cycle, this will force off if the grace off
+     * didn't occur */
     system("powerctrl power_cycle");
     return ipmi::responseSuccess();
 }
-
-
-
-
 
 ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
 {
@@ -1571,7 +1610,7 @@ ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
      * Response data:
      * Byte 1    : 0x00 if BMC boot complete.
      *           : 0x01 if BMC boot un-complete.
-    */
+     */
 
     DbusObjectInfo objInfo;
     boost::system::error_code ec =
@@ -1604,29 +1643,21 @@ ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
     return ipmi::responseSuccess(static_cast<uint8_t>(1));
 }
 
-
-
-
-
-
 } // namespace ipmi
-
-
 
 void registerNvOemFunctions()
 {
 
-// <Get IPMI OEM Version>
+    // <Get IPMI OEM Version>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetOEMVersion));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetOEMVersion,
-                          ipmi::Privilege::User,
-                          ipmi::ipmiGetOEMVersion);
+                          ipmi::Privilege::User, ipmi::ipmiGetOEMVersion);
 
-// <Execute SMBPBI passthrough command>
+    // <Execute SMBPBI passthrough command>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSMBPBIPassthrough));
@@ -1636,7 +1667,7 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughCmd);
 
-// <Execute SMBPBI passthrough command for extended data>
+    // <Execute SMBPBI passthrough command for extended data>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSMBPBIPassthroughExtended));
@@ -1646,17 +1677,16 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughExtendedCmd);
 
-// <Set fan control mode>
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetFanMode));
+    // <Set fan control mode>
+    log<level::NOTICE>("Registering ",
+                       entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+                       entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetFanMode));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdSetFanMode,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiSetFanControl);
+                          ipmi::Privilege::Admin, ipmi::ipmiSetFanControl);
 
-// <Set All Fan Zones PWM Duty>
+    // <Set All Fan Zones PWM Duty>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdAllFanZonesPWMDuty));
@@ -1666,45 +1696,44 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetAllFanZonesPWMDuty);
 
-// <Set Fan Zone PWM Duty>
+    // <Set Fan Zone PWM Duty>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetFanZonePWMDuty));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdSetFanZonePWMDuty,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiSetFanZonePWMDuty); 
+                          ipmi::Privilege::Admin, ipmi::ipmiSetFanZonePWMDuty);
 
-// <Enable/Disable sensor scanning>
-    log<level::NOTICE>(
-	"Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-	 entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSensorScanEnable));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
-		          ipmi::nvidia::misc::cmdSensorScanEnable,
-			  ipmi::Privilege::Admin, ipmi::ipmiSensorScanEnableDisable);
-              
-
-// <Get SSD LED Status>
+    // <Enable/Disable sensor scanning>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetSSDLed));
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSensorScanEnable));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSensorScanEnable,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSensorScanEnableDisable);
+
+    // <Get SSD LED Status>
+    log<level::NOTICE>("Registering ",
+                       entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+                       entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetSSDLed));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetSSDLed,
                           ipmi::Privilege::Admin, ipmi::ipmiOemGetSSDLed);
 
-// <Set SSD LED Status>
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetSSDLed));
+    // <Set SSD LED Status>
+    log<level::NOTICE>("Registering ",
+                       entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+                       entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetSSDLed));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetSSDLed,
                           ipmi::Privilege::Admin, ipmi::ipmiOemSetSSDLed);
 
-// <Get LED Status>
+    // <Get LED Status>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetLedStatus));
@@ -1713,34 +1742,31 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetLedStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemGetLedStatus);
 
-    
-// <Master Read Write>
+    // <Master Read Write>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemPost),
-	entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdI2CMasterReadWrite));
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdI2CMasterReadWrite));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
-		          ipmi::nvidia::app::cmdI2CMasterReadWrite,
-			  ipmi::Privilege::Admin, ipmi::ipmiI2CMasterReadWrite);
-// <Get SEL Policy>
+                          ipmi::nvidia::app::cmdI2CMasterReadWrite,
+                          ipmi::Privilege::Admin, ipmi::ipmiI2CMasterReadWrite);
+    // <Get SEL Policy>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetSELPolicy));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdGetSELPolicy,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiGetSELPolicy);
-// <Set SEL Policy>
+                          ipmi::Privilege::Admin, ipmi::ipmiGetSELPolicy);
+    // <Set SEL Policy>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSetSELPolicy));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdSetSELPolicy,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiSetSELPolicy);
-// <Get USB Description>
+                          ipmi::Privilege::Admin, ipmi::ipmiSetSELPolicy);
+    // <Get USB Description>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetUsbDescription));
@@ -1749,7 +1775,7 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetUsbDescription,
                           ipmi::Privilege::Admin, ipmi::ipmiGetUsbDescription);
 
-// <Get Virtual USB Serial Number>
+    // <Get Virtual USB Serial Number>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetUsbSerialNum));
@@ -1758,7 +1784,7 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetUsbSerialNum,
                           ipmi::Privilege::Admin, ipmi::ipmiGetUsbSerialNum);
 
-// <Get Redfish Service Hostname>
+    // <Get Redfish Service Hostname>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetRedfishHostName));
@@ -1767,7 +1793,7 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetRedfishHostName,
                           ipmi::Privilege::Admin, ipmi::ipmiGetRedfishHostName);
 
-// <Get IPMI Channel Number of Redfish HostInterface>
+    // <Get IPMI Channel Number of Redfish HostInterface>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetipmiChannelRfHi));
@@ -1776,7 +1802,7 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetipmiChannelRfHi,
                           ipmi::Privilege::Admin, ipmi::ipmiGetipmiChannelRfHi);
 
-// <Get Bootstrap Account Credentials>
+    // <Get Bootstrap Account Credentials>
     log<level::NOTICE>(
         "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBootStrapAcc));
@@ -1785,9 +1811,8 @@ void registerNvOemFunctions()
                                ipmi::nvidia::misc::cmdGetBootStrapAcc,
                                ipmi::Privilege::sysIface,
                                ipmi::ipmiGetBootStrapAccount);
-    
-        
-// <Get Redfish Service UUID>
+
+    // <Get Redfish Service UUID>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetRedfishServiceUuid));
@@ -1797,7 +1822,7 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetRedfishServiceUuid);
 
-// <Get Redfish Service Port Number>
+    // <Get Redfish Service Port Number>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetRedfishServicePort));
@@ -1807,8 +1832,7 @@ void registerNvOemFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetRedfishServicePort);
 
-
-// <Get Manager Certificate Fingerprint>
+    // <Get Manager Certificate Fingerprint>
     log<level::NOTICE>(
         "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetManagerCertFingerPrint));
@@ -1818,7 +1842,7 @@ void registerNvOemFunctions()
                                ipmi::Privilege::Admin,
                                ipmi::ipmiGetManagerCertFingerPrint);
 
-// <Soft Reboot>
+    // <Soft Reboot>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSoftPowerCycle));
@@ -1827,16 +1851,14 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdSoftPowerCycle,
                           ipmi::Privilege::Admin, ipmi::ipmiOemSoftReboot);
 
-
-// <Get BMC Boot complete>
+    // <Get BMC Boot complete>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
         entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBMCBootComplete));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetBMCBootComplete,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmiGetBMCBootComplete);
-    
+                          ipmi::Privilege::Admin, ipmi::ipmiGetBMCBootComplete);
+
     return;
 }
