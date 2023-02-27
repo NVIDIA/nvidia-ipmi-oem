@@ -285,6 +285,8 @@ void startMatch(void)
                                 {
                                     return;
                                 }
+				boost::asio::spawn(*getIoContext(), [](boost::asio::yield_context yield) {
+				replaceCacheFru(getSdBus(), yield);});
                                 writeFruIfRunning();
                                 frus[path] = object;
                                 recalculateHashes();
@@ -313,6 +315,8 @@ void startMatch(void)
                                 {
                                     return;
                                 }
+				boost::asio::spawn(*getIoContext(), [](boost::asio::yield_context yield) {
+			        replaceCacheFru(getSdBus(), yield);});
                                 writeFruIfRunning();
                                 frus.erase(path);
                                 recalculateHashes();
@@ -320,11 +324,6 @@ void startMatch(void)
                                 sensorDataRecords.clear();
                                 lastDevId = 0xFF;
                             });
-
-    // call once to populate
-    boost::asio::spawn(*getIoContext(), [](boost::asio::yield_context yield) {
-        replaceCacheFru(getSdBus(), yield);
-    });
 }
 
 /** @brief implements the read FRU data command
