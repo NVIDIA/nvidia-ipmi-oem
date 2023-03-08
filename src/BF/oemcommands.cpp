@@ -694,7 +694,35 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-
+    /**
+     * @brief IPMI OEM - Notify upon DPU boot
+     * Called from DPU UEFI. Update Host0 property: BootProgressLastUpdate
+     * @param[in] ctx ipmi command context
+     *
+     * @returns RspType - response return  */
+    ipmi::RspType<uint8_t> ipmiOemNotifyDpuBoot(ipmi::Context::ptr ctx)
+    {
+        try
+        {
+            uint64_t timeValue(std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count());
+            std::variant<uint64_t> variantTimeValue(timeValue);             
+            auto method = ctx->bus->new_method_call("xyz.openbmc_project.State.Host",
+                                                    "/xyz/openbmc_project/state/host0",
+                                                    "org.freedesktop.DBus.Properties", 
+                                                    "Set");
+            method.append("xyz.openbmc_project.State.Boot.Progress", "BootProgressLastUpdate", variantTimeValue);
+            auto reply = ctx->bus->call(method); 
+            return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmiOemSyncDpuVersion error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+    }
 
 } // namespace ipmi
 
@@ -717,8 +745,6 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmd3PortEthSwitchStatus,
                           ipmi::Privilege::Admin, ipmi::ipmi3PortEthSwitchStatus);
-    
-    
 
      //Enter Live Fish mode  
     log<level::NOTICE>(
@@ -729,11 +755,7 @@ void registerNvOemPlatformFunctions()
                           ipmi::nvidia::app::cmdEnterLiveFish,
                           ipmi::Privilege::Admin, ipmi::ipmicmdEnterLiveFish); 
 
-
-
-
     //Exit Live Fish mode 
-
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdExitLiveFish));
@@ -770,202 +792,149 @@ void registerNvOemPlatformFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiBFResetControl);
     
-       
-    
     // <Get FW Bootup slot>
-    
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetFwBootupSlot,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiGetFwBootupSlotBF);
 
     // <Execute SMBPBI passthrough command>
-   
- 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSMBPBIPassthrough,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughCmdBF);
 
     // <Execute SMBPBI passthrough command for extended data>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSMBPBIPassthroughExtended,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughExtendedCmBF);
 
     // <Set fan control mode>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdSetFanMode,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetFanControlBF);
 
     // <Set All Fan Zones PWM Duty>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdAllFanZonesPWMDuty,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetAllFanZonesPWMDutyBF);
 
     // <Set Fan Zone PWM Duty>
-    
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::app::cmdSetFanZonePWMDuty,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSetFanZonePWMDutyBF);
 
-  
-
     // <Get BIOS POST Status>
-    
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdGetBiosPostStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostStatusBF);
 
     // <Get BIOS POST Code>
-    
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdGetBiosPostCode,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBiosPostCodeBF);
 
     // <Soft Reboot>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSoftPowerCycle,
                           ipmi::Privilege::Admin, ipmi::ipmiOemSoftRebootBF);
 
     // <Get device firmware version>
-   
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetDeviceFirmwareVersion,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscFirmwareVersionBF);
 
     // <Get WP status>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetWpStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscGetWPBF);
 
     // <Set WP status>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetWpStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscSetWPBF);
 
-
-
     // <Enable/Disable sensor scanning>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSensorScanEnable,
                           ipmi::Privilege::Admin, ipmi::ipmiSensorScanEnableDisableBF);
 
     // <Get SSD LED Status>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetSSDLed,
                           ipmi::Privilege::Admin, ipmi::ipmiOemGetSSDLedBF);
 
     // <Set SSD LED Status>
-    
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetSSDLed,
                           ipmi::Privilege::Admin, ipmi::ipmiOemSetSSDLedBF);
 
     // <Get LED Status>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetLedStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemGetLedStatusBF);
 
     // <Get PSU Power>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetPsuPower,
                           ipmi::Privilege::Admin, ipmi::ipmiOemPsuPowerBF);
 
     // <Bios set version>
-   
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemPost,
                           ipmi::nvidia::app::cmdSetBiosVersion,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosSetVersionBF);
 
     // <Bios get bootup image>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetBiosBootupImage,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosGetBootImageBF);
 
     // <Bios get next bootup image>
-    
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetBiosNextImage,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosGetNextBootImageBF);
 
     // <Bios set next bootup image>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetBiosNextImage,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosSetNextBootImageBF);
 
     // <Get bios version>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetBiosVerions,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosGetVerionBF);
 
     // <Get bios config>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetBiosConfig,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosGetConfigBF);
 
     // <Set bios config>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetBiosConfig,
                           ipmi::Privilege::Admin, ipmi::ipmiBiosSetConfigBF);
 
     // <Get USB Description>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetUsbDescription,
                           ipmi::Privilege::Admin, ipmi::ipmiGetUsbDescriptionBF);
 
     // <Get Virtual USB Serial Number>
-   
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetUsbSerialNum,
                           ipmi::Privilege::Admin, ipmi::ipmiGetUsbSerialNumBF);
 
-// <Get IPMI Channel Number of Redfish HostInterface>
-   
-
+    // <Get IPMI Channel Number of Redfish HostInterface>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetipmiChannelRfHi,
                           ipmi::Privilege::Admin, ipmi::ipmiGetipmiChannelRfHiBF);
 
 
     // <Get Bootstrap Account Credentials>
- 
     ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
                                ipmi::nvidia::misc::cmdGetBootStrapAcc,
                                ipmi::Privilege::sysIface,
@@ -973,33 +942,28 @@ void registerNvOemPlatformFunctions()
 
 
     // <Get Manager Certificate Fingerprint>
-   
     ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
                                ipmi::nvidia::misc::cmdGetManagerCertFingerPrint,
                                ipmi::Privilege::Admin,
                                ipmi::ipmiGetManagerCertFingerPrintBF);
 
     // <Get Maxp/MaxQ Configuration>
-    
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetMaxPMaxQConfiguration,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiOemGetMaxPMaxQConfigurationBF);
 
     // <Set Maxp/MaxQ Configuration>
-  
-
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetMaxPMaxQConfiguration,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiOemSetMaxPMaxQConfigurationBF);
-    
    
- 
+    // <sync DPU versions>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdNotifyHostBoot,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiOemNotifyDpuBoot);
     
-
     return;
-
-
 }

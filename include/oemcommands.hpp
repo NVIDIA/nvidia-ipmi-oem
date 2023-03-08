@@ -75,6 +75,7 @@ constexpr auto cmdGetManagerCertFingerPrint = 0x01;
 constexpr auto cmdGetBootStrapAcc = 0x02;
 constexpr auto cmdGetMaxPMaxQConfiguration = 0x90;
 constexpr auto cmdSetMaxPMaxQConfiguration = 0x91;
+constexpr auto cmdNotifyHostBoot = 0x92;
 
 constexpr auto getFirmwareVersionDeviceMBFPGA = 0x00;
 constexpr auto getFirmwareVersionDeviceGBFPGA = 0x01;
