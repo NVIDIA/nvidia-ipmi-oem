@@ -115,30 +115,26 @@ namespace ipmi
 
         return ipmi::responseSuccess();
     } 
+    static ipmi::Cc i2cTransaction(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData) {
+        std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
+
+        int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
+        if (i2cDev < 0)
+        {
+            log<level::ERR>("Failed to open i2c bus",
+                            phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
+            return ipmi::ccInvalidFieldRequest;
+        }
+        std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
+
+        auto ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
+        if (ret != ipmi::ccSuccess) {
+            log<level::ERR>("Failed to perform I2C transaction!");
+        }
+        return ret;
+    }   
     
-    static ipmi::Cc i2cTransactionBF(uint8_t bus, uint8_t slaveAddr, std::vector<uint8_t> &wrData, std::vector<uint8_t> &rdData,  bool SMBUS = false) {
-    std::string i2cBus = "/dev/i2c-" + std::to_string(bus);
-    int i2cDev = ::open(i2cBus.c_str(), O_RDWR | O_CLOEXEC);
-    if (i2cDev < 0)
-    {
-        log<level::ERR>("Failed to open i2c bus",
-                        phosphor::logging::entry("BUS=%s", i2cBus.c_str()));
-        return ipmi::ccInvalidFieldRequest;
-    }
-    std::shared_ptr<int> scopeGuard(&i2cDev, [](int *p) { ::close(*p); });
-
-    auto ret =ipmi::ccSuccess;
-    if(SMBUS == false) {
-            ret = ipmi::i2cWriteRead(i2cBus, slaveAddr, wrData, rdData);
-    }else{
-             ret = ipmi::i2cReadDataBlock(i2cBus, slaveAddr, rdData, ipmi::nvidia::cecI2cVersionRegisterBF3);
-    }
-
-    if (ret != ipmi::ccSuccess) {
-        log<level::ERR>("Failed to perform I2C transaction!");
-    }
-    return ret;
-    }
+    
     ipmi::RspType<> ipmiSupportLaunchpad(uint8_t newState, uint8_t bfModel){
         if(bfModel != 2 && bfModel != 3 ){
              phosphor::logging::log<level::NOTICE>("BF model can be only  2 or 3");
@@ -173,7 +169,7 @@ namespace ipmi
             address = ipmi::nvidia::ethSwitchI2caddressBF2;
             bus =  ipmi::nvidia::ethSwitchI2cBusBF2;
         }       
-        auto ret_eth = i2cTransactionBF(bus, address, writeData, readBuf);
+        auto ret_eth = i2cTransaction(bus, address, writeData, readBuf);
         
         if (ret_eth != ipmi::ccSuccess)  {
             phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't disable 3 port eth switch");
@@ -232,7 +228,7 @@ namespace ipmi
                 ethSwitchI2caddress = ipmi::nvidia::ethSwitchI2caddressBF2;
                 ethSwitchI2cBus = ipmi::nvidia::ethSwitchI2cBusBF2;
             }       
-            auto ret_eth = i2cTransactionBF(ethSwitchI2cBus,ethSwitchI2caddress, writeData, readBuf);
+            auto ret_eth = i2cTransaction(ethSwitchI2cBus,ethSwitchI2caddress, writeData, readBuf);
             
             if (ret_eth != ipmi::ccSuccess)  {
                 phosphor::logging::log<phosphor::logging::level::ERR>("Couldn't read the 3 port eth switch status");
@@ -343,97 +339,6 @@ namespace ipmi
     }
 
 
-
-    ipmi::RspType<uint8_t, std::vector<uint8_t>> getBMCSoftwareVersionInfo(){
-        std::string versionStr; 
-        std::ifstream os_relase("/etc/os-release");
-        for (int i =0; i < 4; i++){
-            getline (os_relase, versionStr);
-            std::cout << versionStr<<std::endl;
-        }  
-        os_relase.close();
-        std::vector<std::string> parts;
-        boost::split(parts, versionStr, boost::is_any_of("=-."));
-        uint8_t maj ;
-        uint8_t min ;
-        uint16_t d0 = 0 ;
-        uint8_t d1 = 0;
-        for (int i =0; i < parts.size(); i++){
-            std::cout << parts[i] << std::endl;
-        }  
-        if (parts[0] != "VERSION_ID" ) {
-             return ipmi::responseResponseError();
-        }
-
-        
-        
-        //check if BF3
-        std::vector<uint8_t> ret(6);
-        std::string parts1 = parts[1];
-        if(parts1[0] > 0x39 || parts1[0] < 0x30  ){
-            maj = std::stoi(parts[2]); // major rev 
-            min = std::stoi(parts[3]); // minor rev, need to convert to bcd 
-        //    d0 = std::stoi(parts[3]); 
-        }else{
-            maj = std::stoi(parts[1]); // major rev 
-            min = std::stoi(parts[2]); // minor rev, need to convert to bcd 
-            d0 = std::stoi(parts[3]); // extra part 1 
-            
-        }
-
-        ret[0] = maj & ~(1 << 7); /* mask MSB off */
-        min = (min > 99 ? 99 : min);
-        ret[1] = min % 10 + (min / 10) * 16;
-        ret[2] = d0 & 0xff;
-        ret[3] = (d0 >> 8) & 0xff;
-        ret[4] = d1; /* can only be 0 or 1 */
-        ret[5] = 0;
-
-        return ipmi::responseSuccess(2, ret);
-        
-    }
-
-
-    ipmi::RspType<uint8_t, std::vector<uint8_t>>ipmiGetFirmwareVersionBMC(ipmi::Context::ptr ctx) {
-            /* BMC FW version requests */
-    
-        return getBMCSoftwareVersionInfo();  
-    }
-
-
-    static ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscCECCommand(uint8_t bus, uint8_t reg, uint8_t bfModel = 1) {
-        using namespace ipmi::nvidia::misc;
-        std::vector<uint8_t> writeData={0x00, reg};
-        std::vector<uint8_t> readBuf(4);
-        bool SMBUS = true;
-        uint8_t address =  ipmi::nvidia::cecI2cAddressBF3;    
-        if(bfModel != 3){
-            SMBUS = false;
-            address =  ipmi::nvidia::cecI2cAddressBF2;
-            
-        }  
-        auto ret = i2cTransactionBF(bus, address, writeData, readBuf,SMBUS);
-        if (ret != ipmi::ccSuccess) {
-            log<level::ERR>("CEC version read failed",
-                phosphor::logging::entry("BUS=%d", bus));
-            return ipmi::responseResponseError();
-        }
-
-        return ipmi::responseSuccess(0x00, readBuf);
-    }
-
-    ipmi::RspType<uint8_t, std::vector<uint8_t>>ipmiGetFirmwareVersionCEC(uint8_t bfModel ) {
-
-        if (bfModel == 2){
-            return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBusBF2,ipmi::nvidia::cecI2cVersionRegisterBF2,bfModel);
-        }
-        else if (bfModel == 3){
-            return ipmiOemMiscCECCommand(ipmi::nvidia::cecI2cBusBF3,ipmi::nvidia::cecI2cVersionRegisterBF3,bfModel);
-        }
-    
-        phosphor::logging::log<level::NOTICE>("BF model can be only  2 or 3");
-        return ipmi::responseResponseError();
-    }
 
     ipmi::RspType<uint8_t>
     ipmiBFResetControl(uint8_t resetOption)
@@ -763,25 +668,7 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdExitLiveFish,
                           ipmi::Privilege::Admin, ipmi::ipmicmdExitLiveFish); 
-     //  Get BMC FW version 
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetFirmwareVersionBMC));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdGetFirmwareVersionBMC,
-                          ipmi::Privilege::Admin, ipmi::ipmiGetFirmwareVersionBMC);
-
-    //  Get CEC FW version  
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdGetFirmwareVersionCEC));
-
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdGetFirmwareVersionCEC,
-                          ipmi::Privilege::Admin, ipmi::ipmiGetFirmwareVersionCEC);
-
- 
+    
     // <BF2 and BF3 Reset Control>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
