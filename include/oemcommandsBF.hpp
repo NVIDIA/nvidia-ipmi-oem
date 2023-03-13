@@ -18,7 +18,9 @@ constexpr auto ethSwitchI2caddressBF3    = 0x5f;
 constexpr auto liveFishGpio              = 929;
 constexpr auto socRstGpio                = 932;
 constexpr auto preRstGpio                = 952;	
-
+constexpr auto gpioHigh                  = 1;
+constexpr auto gpioLow                   = 0;
+constexpr auto resetPause                = 2;
 
 namespace app
 {
@@ -29,6 +31,7 @@ constexpr auto cmdEnterLiveFish = 0x92;
 constexpr auto cmdExitLiveFish = 0x93;
 constexpr auto cmdSupportLaunchpad = 0x94;
 constexpr auto cmd3PortEthSwitchStatus = 0x95;
+constexpr auto cmdForceSocHardRst = 0x96;
 } // namespace app
 
 namespace misc

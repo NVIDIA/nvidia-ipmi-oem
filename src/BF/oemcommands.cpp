@@ -275,8 +275,30 @@ namespace ipmi
         return true;
     }
 
-    static void cleangpio(){  
-        if (!setGpioRawLF(nvidia::socRstGpio,1) || !setGpioRawLF(nvidia::preRstGpio,1) || !setGpioRawLF(nvidia::liveFishGpio,1)){ 
+
+
+    static bool getGpioRawLF( uint32_t gpio, uint8_t &v) {
+        int gp = gpioExportLF(gpio);
+        if (gp < 0) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to export gpio!");
+            return false;
+        }
+        std::ifstream valueIf("/sys/class/gpio/gpio" + std::to_string(gp) + "/value", std::ifstream::in);
+        if (!valueIf.is_open()) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to open gpio value!");
+            return false;
+        }
+        int r;
+        valueIf >> r;
+        v = r;
+        return true;
+    }
+    
+   static void cleanGpio(){  
+        if (!setGpioRawLF(nvidia::socRstGpio,ipmi::nvidia::gpioHigh) || !setGpioRawLF(nvidia::preRstGpio,ipmi::nvidia::gpioHigh) 
+            || !setGpioRawLF(nvidia::liveFishGpio,ipmi::nvidia::gpioHigh)){ 
             phosphor::logging::log<level::ERR>("unable to restore gpios to default"); 
         }else{
             phosphor::logging::log<level::NOTICE>("restored gpios to default (1)");
@@ -287,58 +309,100 @@ namespace ipmi
     static bool changeSocRstAndPreRstGpios(uint32_t value){
         if (!setGpioRawLF(nvidia::preRstGpio,value)){ 
             phosphor::logging::log<level::ERR>("failed to write to PRE_RESET gpio");
-            cleangpio();
+            cleanGpio();
             return false;
             }  
     
+        std::this_thread::sleep_for(std::chrono::milliseconds(ipmi::nvidia::resetPause));
 
         if (!setGpioRawLF(nvidia::socRstGpio,value)){ 
             phosphor::logging::log<level::ERR>("failed to write to SOC_RESET gpio");
-            cleangpio();
+            cleanGpio();
             return false;
             }  
-        if (value == 0){
-            sleep(3);
-        }else{
-            sleep(1);
-        }
         return true;
     }
 
 
 
-
-
-    ipmi::RspType<> ipmicmdEnterLiveFish() {
-        if (!setGpioRawLF(nvidia::liveFishGpio,0)){ 
-            phosphor::logging::log<level::ERR>("failed to write '0' to LIVE_FISH gpio");
-            cleangpio();
-            return ipmi::responseResponseError();
+     static bool DPUHardRST(){
+        if (!changeSocRstAndPreRstGpios(ipmi::nvidia::gpioLow)){
+                phosphor::logging::log<level::ERR>("SOC_HARD_RST Command failed, can't change GPIO's to 0");
+                return false;   
             }
-        if (!changeSocRstAndPreRstGpios(0))
-            return ipmi::responseResponseError();   
-        if (!changeSocRstAndPreRstGpios(1))
-            return ipmi::responseResponseError();
-        if (!setGpioRawLF(nvidia::liveFishGpio,1)){ 
-            phosphor::logging::log<level::ERR>("failed to write '1' to LIVE_FISH gpio");
-            cleangpio();
+            std::this_thread::sleep_for(std::chrono::milliseconds(ipmi::nvidia::resetPause));
+        if (!changeSocRstAndPreRstGpios(ipmi::nvidia::gpioHigh)){
+                phosphor::logging::log<level::ERR>("SOC_HARD_RST Command failed, can't return GPIO's to 1");
+                return false;  
+        } 
+        std::cout << "soc_hard_rst is being done " << std::endl; 
+        return true;
+    }
+
+    static bool ipmiChangeLF(uint32_t value){
+        //checks if we need to change the FNP GPIO value
+        uint8_t lfGpio = 0;
+        if (!getGpioRawLF(nvidia::liveFishGpio,lfGpio)){
+            phosphor::logging::log<level::ERR>("failed to read from LIVE_FISH gpio");
+            return false;
+        }
+        if (lfGpio == value){
+            phosphor::logging::log<level::ERR>("LF GPIO is allready set, nothing to do ,aborting",
+            phosphor::logging::entry("liveFish GPIO = %lu ", value));
+            return false;
+        }
+        
+    
+        if (!setGpioRawLF(nvidia::liveFishGpio,value)){ 
+            phosphor::logging::log<level::ERR>("failed to write to LIVE_FISH gpio");
+            return false;
+            }
+        std::cout << "LF GPIO =" << value << std::endl; 
+        return true;
+    }
+
+    ipmi::RspType<> ipmicmdForceSocHardRst() {
+        // force SOC_HARD_RST on the DPU
+        if(!DPUHardRST()){
+            phosphor::logging::log<level::ERR>("Failed to preform SOC_HARD_RST");
             return ipmi::responseResponseError();   
         }
-        phosphor::logging::log<level::NOTICE>("Gpios in livefish mode,please reboot the server to enter the DPU into livefish Mode");
         return ipmi::responseSuccess();
+
+    }
+
+     ipmi::RspType<> ipmicmdEnterLiveFish() {
+       //change the livefish GPIO value to 0 and restart the SOC
+        if(!ipmiChangeLF(ipmi::nvidia::gpioLow)){
+            phosphor::logging::log<level::ERR>("Failed to enter to liveFish mode");
+            return ipmi::responseResponseError();   
+        }
+        // force SOC_HARD_RST on the DPU
+        if (!DPUHardRST()){
+            phosphor::logging::log<level::ERR>("Command failed, SOC_HARD_RST failed ");
+            return ipmi::responseResponseError();   
+        }
+        return ipmi::responseSuccess();
+
 
     } 
 
     ipmi::RspType<> ipmicmdExitLiveFish() {
-        if (!changeSocRstAndPreRstGpios(0))
-            return ipmi::responseResponseError();
-        if (!changeSocRstAndPreRstGpios(1))
-            return ipmi::responseResponseError();
-        phosphor::logging::log<level::NOTICE>("Gpios aren't in livefish mode, please reboot the server to enter the DPU to normal mode");
+        //change the livefish GPIO value to 1 and restart the SOC
+        if(!ipmiChangeLF(ipmi::nvidia::gpioHigh) ){
+            phosphor::logging::log<level::ERR>("Failed to exit from liveFish mode");
+            return ipmi::responseResponseError();   
+        }
+
+        // force SOC_HARD_RST on the DPU
+        if (!DPUHardRST()){
+            phosphor::logging::log<level::ERR>("Command failed, SOC_HARD_RST failed ");
+
+            return ipmi::responseResponseError();   
+        }
         return ipmi::responseSuccess();
+
     }
-
-
 
     ipmi::RspType<uint8_t>
     ipmiBFResetControl(uint8_t resetOption)
@@ -667,7 +731,15 @@ void registerNvOemPlatformFunctions()
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdExitLiveFish,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdExitLiveFish); 
+                          ipmi::Privilege::Admin, ipmi::ipmicmdExitLiveFish);
+    //Force Soc HArd Reset
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdForceSocHardRst));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdForceSocHardRst,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdForceSocHardRst); 
     
     // <BF2 and BF3 Reset Control>
     log<level::NOTICE>(
