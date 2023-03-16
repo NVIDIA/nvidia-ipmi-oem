@@ -629,17 +629,6 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-
-   
-
-    ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
-        ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx,
-                                uint8_t disableCredBootStrap)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetBootStrapAccount command is unsupported in Bluefield 2/3");
-        return ipmi::response(ipmi::ccResponseError);
-    }
-
     ipmi::RspType<std::vector<uint8_t>>
         ipmiGetManagerCertFingerPrintBF(ipmi::Context::ptr ctx, uint8_t certNum)
     {
@@ -891,14 +880,6 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetipmiChannelRfHi,
                           ipmi::Privilege::Admin, ipmi::ipmiGetipmiChannelRfHiBF);
-
-
-    // <Get Bootstrap Account Credentials>
-    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
-                               ipmi::nvidia::misc::cmdGetBootStrapAcc,
-                               ipmi::Privilege::sysIface,
-                               ipmi::ipmiGetBootStrapAccountBF);
-
 
     // <Get Manager Certificate Fingerprint>
     ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
