@@ -53,6 +53,8 @@ constexpr auto powerLedName                 = "power_led";
 constexpr auto faultLedName                 = "fault_led";
 constexpr auto mbLedName                    = "motherboard_debug_led";  
 
+constexpr auto GWpGpioId                    = 70;
+constexpr auto GWpGpioChip                  = "gpiochip816";
 
 
 

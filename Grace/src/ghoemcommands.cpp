@@ -1771,6 +1771,143 @@ ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
     return ipmi::responseSuccess(static_cast<uint8_t>(1));
 }
 
+
+
+
+
+/* This function will export the gpio if it doesn't exist in sysfs,
+   have to use the sysfs interface because the char device interface
+   resets once closed, and also sysfs gives persistance  */
+static int gpioExport(std::string gpiochip, uint32_t gpio) {
+
+    int base;
+    std::ifstream chipbase("/sys/class/gpio/" + gpiochip + "/base", std::ifstream::in);
+    if (!chipbase.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Failed to open gpiochip base!");
+        return -1;
+    }
+
+    chipbase >> base;
+    chipbase.close();
+
+    gpio += base;
+
+    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio))) {
+        std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
+        if (!exportOf.is_open()) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio export!");
+            return -2;
+        }
+        exportOf << gpio;
+        exportOf.close();
+    }
+    return gpio;
+}
+
+static ipmi::RspType<uint8_t> getGpioCmd(std::string gpiochip, uint32_t gpio)
+{
+    int gp = gpioExport(gpiochip, gpio);
+    if (gp < 0) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to export gpio!");
+        return ipmi::responseUnspecifiedError();
+    }
+    std::ifstream valueIf("/sys/class/gpio/gpio886/value", std::ifstream::in);
+    if (!valueIf.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio value!");
+        return ipmi::responseUnspecifiedError();
+    }
+    int r;
+    valueIf >> r;
+
+    return ipmi::responseSuccess(r);
+}
+
+
+static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio, uint32_t value)
+{
+    int gp = gpioExport(gpiochip, gpio);
+
+    if (gp < 0) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to export gpio!");
+        return ipmi::responseUnspecifiedError();
+    }
+
+    int fd = open("/sys/class/gpio/gpio886/direction", O_WRONLY);
+    if (fd == -1) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+			"Unable to open /sys/class/gpio/gpio886/direction");
+        return ipmi::responseUnspecifiedError();
+    }
+
+    if (write(fd, "out", 3) != 3) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+			"Error writing to /sys/class/gpio/gpio886/direction");
+        return ipmi::responseUnspecifiedError();
+    }
+
+    close(fd);
+
+    fd = open("/sys/class/gpio/gpio886/value", O_WRONLY);
+    if (fd == -1) {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+			"Unable to open /sys/class/gpio/gpio886/value");
+        return ipmi::responseUnspecifiedError();
+    }
+
+    if(value)
+    {   
+        if (write(fd, "1", 1) != 1) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+			    "Error writing to /sys/class/gpio/gpio886/value");
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+
+    else {
+
+        if (write(fd, "0", 1) != 1) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+			    "Error writing to /sys/class/gpio/gpio886/value");
+            return ipmi::responseUnspecifiedError();
+        }
+    }    
+    
+
+    close(fd);
+    return ipmi::responseSuccess();
+}
+
+
+ipmi::RspType<> ipmiOemMiscSetWP(uint8_t type, uint8_t id, uint8_t value)
+{
+    using namespace ipmi::nvidia::misc;
+    if (type == getWPType) {
+        return setGpioCmd(nvidia::GWpGpioChip, nvidia::GWpGpioId, value);
+    }
+    else {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Unknown  device  for WP requested");
+    }
+
+}
+
+ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
+{
+    using namespace ipmi::nvidia::misc;
+    if (type == getWPType) {
+        return getGpioCmd(nvidia::GWpGpioChip, nvidia::GWpGpioId);
+    }
+    else {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Unknown  device  for WP requested");
+
+    }
+
+}
+
+
 } // namespace ipmi
 
 void registerNvOemFunctions()
@@ -2005,6 +2142,24 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetBMCBootComplete,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBMCBootComplete);
+
+    // <Get WP status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetWpStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdGetWpStatus,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemMiscGetWP);
+
+    // <Set WP status>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetWpStatus));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::misc::cmdSetWpStatus,
+                          ipmi::Privilege::Admin, ipmi::ipmiOemMiscSetWP);
 
     return;
 }

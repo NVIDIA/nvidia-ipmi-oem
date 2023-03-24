@@ -84,6 +84,10 @@ constexpr uint8_t biosPasswordTypeNoPassowrd = 0x01;
 constexpr uint8_t biosPasswordTypePbkdf2Sha256 = 0x02;
 constexpr uint8_t biosPasswordTypePbkdf2Sha384 = 0x03;
 
+constexpr auto cmdGetWpStatus = 0x8A;
+constexpr auto cmdSetWpStatus = 0x8B;
+constexpr auto getWPType = 0x00;
+
 } // namespace misc
 namespace chassis
 {} // namespace chassis
