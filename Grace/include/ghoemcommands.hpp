@@ -1,5 +1,5 @@
 /**
- * Copyright © 2022 NVIDIA Corporation
+ * Copyright © 2022-2023 NVIDIA Corporation
  *
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -90,6 +90,8 @@ constexpr auto getWPType = 0x00;
 
 } // namespace misc
 namespace chassis
-{} // namespace chassis
+{
+constexpr auto cmdStandByPower = 0x12;
+} // namespace chassis
 } // namespace nvidia
 } // namespace ipmi

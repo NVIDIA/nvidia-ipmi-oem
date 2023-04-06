@@ -1925,6 +1925,68 @@ ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
 
 }
 
+ipmi::RspType<uint8_t> ipmicmdStandByPowerOnOff(uint8_t StandByPowerOption)
+{
+    int response;
+    if (StandByPowerOption == 0x00)
+    {
+        // To start nvidia-standby-poweroff 'run power' has to be DOWN i.e RUN_POWER_EN = 0
+        std::string standbyPoweroff = "systemctl start nvidia-standby-poweroff.service";
+        std::string runPower = "obmcutil poweroff";
+        auto r = system(runPower.c_str());
+        if (r != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Run Power Error: Run power is still UP");
+            
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
+        
+        auto s = system(standbyPoweroff.c_str());
+        if (s != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+            "Stand By Power OFF Error : Not able to set it UP");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+            
+        return ipmi::response(ipmi::ccSuccess);
+
+    }
+
+    else if (StandByPowerOption == 0x01)
+    {
+        // To start nvidia-standby-poweron 'run power' should be UP which will turn nvidia-standby-poweroff down and set RUN_POWER_PG = 1
+        std::string standbyPoweroff = "systemctl start nvidia-standby-poweron.service";
+        std::string runPower = "obmcutil poweron";
+        auto r = system(runPower.c_str());
+        if (r != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Run Power Error: Run power is not coming UP");
+            
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
+        
+        auto s = system(standbyPoweroff.c_str());
+        if (s != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+            "Stand By Power ON Error : Not able to set it UP");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+            
+        return ipmi::response(ipmi::ccSuccess);
+
+    }
+
+return ipmi::response(ipmi::ccInvalidFieldRequest);
+
+}
+
+
 
 } // namespace ipmi
 
@@ -2178,6 +2240,18 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetWpStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscSetWP);
+  
+    // <set stand by power on-off>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::chassis::cmdStandByPower));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::chassis::cmdStandByPower,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdStandByPowerOnOff);
+
+
 
     return;
 }
+
