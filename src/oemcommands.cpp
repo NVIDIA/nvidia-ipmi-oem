@@ -3387,58 +3387,40 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                                             userMgrInterface, createUserMethod);
         method.append(userName, std::vector<std::string>{"redfish-hostiface"},
                       "priv-admin", true);
-        // asynchronous method call to avoid ssif timeout
-        dbus->async_send(method, [dbus, service, userName, password,
-                                  disableCredBootStrap](
-                                     boost::system::error_code ec,
-                                     sdbusplus::message_t& reply) {
-            if (ec || reply.is_method_error())
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "Error returns from call to dbus. BootStrap Failed");
-                return;
-            }
+        auto reply = dbus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error returns from call to dbus. BootStrap Failed");
+            return ipmi::responseResponseError();
+        }
 
-            // update the password
-            int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
-            if (retval != PAM_SUCCESS)
-            {
-                dbus->async_method_call(
-                    [](boost::system::error_code ec2, sdbusplus::message_t& m) {
-                        if (ec2 || m.is_method_error())
-                        {
-                            phosphor::logging::log<
-                                phosphor::logging::level::ERR>(
-                                "Error returns from call to dbus. delete user "
-                                "failed");
-                            return;
-                        }
-                    },
-                    service.c_str(),
-                    std::string(userMgrObjBasePath)
-                        .append("/")
-                        .append(userName),
-                    usersDeleteIface, "Delete");
+        // update the password
+        boost::system::error_code ec;
+        int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
+        if (retval != PAM_SUCCESS)
+        {
+            dbus->yield_method_call<void>(ctx->yield, ec, service.c_str(),
+                                          userMgrObjBasePath + userName,
+                                          usersDeleteIface, "Delete");
 
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "ipmiGetBootStrapAccount : Failed to update password.");
-                return;
-            }
-            else
-            {
-                // update the "CredentialBootstrap" Dbus property w.r.to
-                // disable crendential BootStrap status
-                setCredentialBootStrap(disableCredBootStrap);
-            }
-            return;
-        });
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiGetBootStrapAccount : Failed to update password.");
+            return ipmi::responseUnspecifiedError();
+        }
+        else
+        {
+            // update the "CredentialBootstrap" Dbus property w.r.to
+            // disable crendential BootStrap status
+            setCredentialBootStrap(disableCredBootStrap);
 
-        std::vector<uint8_t> respUserNameBuf, respPasswordBuf;
-        std::copy(userName.begin(), userName.end(),
-                  std::back_inserter(respUserNameBuf));
-        std::copy(password.begin(), password.end(),
-                  std::back_inserter(respPasswordBuf));
-        return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
+            std::vector<uint8_t> respUserNameBuf, respPasswordBuf;
+            std::copy(userName.begin(), userName.end(),
+                      std::back_inserter(respUserNameBuf));
+            std::copy(password.begin(), password.end(),
+                      std::back_inserter(respPasswordBuf));
+            return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
+        }
     }
     catch (const std::exception& e)
     {
@@ -3448,7 +3430,6 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         return ipmi::responseResponseError();
     }
 }
-
 
 ipmi::RspType<std::vector<uint8_t>>
     ipmiGetManagerCertFingerPrint(ipmi::Context::ptr ctx, uint8_t certNum)
