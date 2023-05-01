@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/container/flat_map.hpp>
 #include <boost/process/child.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
