@@ -21,6 +21,10 @@ constexpr auto preRstGpio                = 952;
 constexpr auto gpioHigh                  = 1;
 constexpr auto gpioLow                   = 0;
 constexpr auto resetPause                = 2;
+constexpr auto enumTorSwitchAllowAll     = 0x00;
+constexpr auto enumTorSwitchAllowBMC     = 0x01;
+constexpr auto enumTorSwitchAllowDPU     = 0x02;
+constexpr auto enumTorSwitchDenyNone     = 0x1F;
 
 namespace app
 {
@@ -32,6 +36,8 @@ constexpr auto cmdExitLiveFish = 0x93;
 constexpr auto cmdSupportLaunchpad = 0x94;
 constexpr auto cmd3PortEthSwitchStatus = 0x95;
 constexpr auto cmdForceSocHardRst = 0x96;
+constexpr auto cmdTorSwitchGetMode = 0x97;
+constexpr auto cmdTorSwitchSetMode = 0x98;
 } // namespace app
 
 namespace misc

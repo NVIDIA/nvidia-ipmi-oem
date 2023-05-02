@@ -40,7 +40,13 @@
 const char* systemdServiceBf = "org.freedesktop.systemd1";
 const char* systemdUnitIntfBf = "org.freedesktop.systemd1.Unit";
 const char* rshimSystemdObjBf = "/org/freedesktop/systemd1/unit/rshim_2eservice";
+const char* dbusPropertyInterface = "org.freedesktop.DBus.Properties";
 
+const char* ctlBMCtorSwitchModeService = "xyz.openbmc_project.Settings";
+const char* ctlBMCtorSwitchModeBMCObj = "/xyz/openbmc_project/control/torswitchportsmode";
+const char* ctlBMCtorSwitchModeIntf = "xyz.openbmc_project.Control.TorSwitchPortsMode";
+const char* ctlBMCtorSwitchMode = "TorSwitchPortsMode";
+const char* torSwitchModeSystemdObj = "/org/freedesktop/systemd1/unit/torswitch_2dmode_2eservice";
 
 
 void registerNvOemPlatformFunctions() __attribute__((constructor(102)));
@@ -682,6 +688,122 @@ namespace ipmi
         }
     }
 
+    ipmi::RspType<uint8_t> ipmicmdTorSwitchGetMode(ipmi::Context::ptr ctx)
+    {
+        try
+        {
+            auto method = ctx->bus->new_method_call(ctlBMCtorSwitchModeService,
+                                                    ctlBMCtorSwitchModeBMCObj,
+                                                    dbusPropertyInterface,
+                                                    "Get");
+            method.append(ctlBMCtorSwitchModeIntf, ctlBMCtorSwitchMode);
+            auto reply = ctx->bus->call(method);
+            if (reply.is_method_error())
+            {
+                log<level::ERR>("ipmicmdTorSwitchGetMode: Get Dbus error",
+                                entry("SERVICE=%s", ctlBMCtorSwitchModeService));
+                return ipmi::responseResponseError();
+            }
+
+            std::variant<std::string> variantValue;
+            reply.read(variantValue);
+
+            auto strValue = std::get<std::string>(variantValue);
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.All")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchAllowAll);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.BMC")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchAllowBMC);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.DPU")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchAllowDPU);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.None")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchDenyNone);
+            }
+
+            log<level::ERR>("ipmicmdTorSwitchGetMode: Invalid Mode");
+            return ipmi::responseResponseError();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdTorSwitchGetMode error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
+    }
+
+    ipmi::RspType<uint8_t> ipmicmdTorSwitchSetMode(ipmi::Context::ptr ctx,
+                                                   uint8_t parameter)
+    {
+        std::string strValue;
+        switch(parameter)
+        {
+            case ipmi::nvidia::enumTorSwitchAllowAll:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.All";
+                break;
+            case ipmi::nvidia::enumTorSwitchAllowBMC:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.BMC";
+                break;
+            case ipmi::nvidia::enumTorSwitchAllowDPU:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.DPU";
+                break;
+            case ipmi::nvidia::enumTorSwitchDenyNone:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.None";
+                break;
+            default:
+                log<level::ERR>("ipmicmdTorSwitchGetMode: Invalid Mode");
+                return ipmi::responseInvalidFieldRequest();
+        }
+
+        // Set Tor Switch Mode
+        try
+        {
+            std::variant<std::string> variantValue(strValue);
+
+            auto method = ctx->bus->new_method_call(ctlBMCtorSwitchModeService,
+                                                    ctlBMCtorSwitchModeBMCObj,
+                                                    dbusPropertyInterface,
+                                                    "Set");
+            method.append(ctlBMCtorSwitchModeIntf, ctlBMCtorSwitchMode, variantValue);
+            auto reply = ctx->bus->call(method);
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdTorSwitchSetMode error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::responseUnspecifiedError();
+        }
+
+        // Restart TOR Switch Control Service
+        try
+        {
+            auto method = ctx->bus->new_method_call(systemdServiceBf,
+                                                    torSwitchModeSystemdObj,
+                                                    systemdUnitIntfBf,
+                                                    "Restart");
+            method.append("replace");
+            ctx->bus->call_noreply(method);
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("Failed to restart TorSwitch Control service",
+                phosphor::logging::entry("EXCEPTION=%s", e.what()));
+            return ipmi::responseUnspecifiedError();
+        }
+
+        return ipmi::responseSuccess(parameter);
+    }
+
 } // namespace ipmi
 
 void registerNvOemPlatformFunctions()
@@ -905,5 +1027,15 @@ void registerNvOemPlatformFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiOemNotifyDpuBoot);
     
+    // < Tor Switch Mode Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdTorSwitchGetMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdTorSwitchGetMode);
+
+    // < Tor Switch Mode Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdTorSwitchSetMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdTorSwitchSetMode);
+
     return;
 }
