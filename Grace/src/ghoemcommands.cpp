@@ -1958,7 +1958,7 @@ ipmi::RspType<uint8_t> ipmicmdStandByPowerOnOff(uint8_t StandByPowerOption)
     else if (StandByPowerOption == 0x01)
     {
         // To start nvidia-standby-poweron 'run power' should be UP which will turn nvidia-standby-poweroff down and set RUN_POWER_PG = 1
-        std::string standbyPoweroff = "systemctl start nvidia-standby-poweron.service";
+        std::string standbyPoweron = "systemctl start nvidia-standby-poweron.service";
         std::string runPower = "obmcutil poweron";
         auto r = system(runPower.c_str());
         if (r != 0)
@@ -1970,7 +1970,7 @@ ipmi::RspType<uint8_t> ipmicmdStandByPowerOnOff(uint8_t StandByPowerOption)
         }
 
         
-        auto s = system(standbyPoweroff.c_str());
+        auto s = system(standbyPoweron.c_str());
         if (s != 0)
         {
             phosphor::logging::log<level::ERR>(
