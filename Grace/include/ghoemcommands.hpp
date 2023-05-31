@@ -91,7 +91,7 @@ constexpr auto getWPType = 0x00;
 } // namespace misc
 namespace chassis
 {
-constexpr auto cmdStandByPower = 0x12;
+constexpr auto cmdStandByPower = 0xA0;
 } // namespace chassis
 } // namespace nvidia
 } // namespace ipmi
