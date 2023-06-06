@@ -31,13 +31,14 @@ namespace app
 
 constexpr auto cmdBFResetControl = 0xA1;
 
-constexpr auto cmdEnterLiveFish = 0x92;
-constexpr auto cmdExitLiveFish = 0x93;
-constexpr auto cmdSupportLaunchpad = 0x94;
-constexpr auto cmd3PortEthSwitchStatus = 0x95;
-constexpr auto cmdForceSocHardRst = 0x96;
-constexpr auto cmdTorSwitchGetMode = 0x97;
-constexpr auto cmdTorSwitchSetMode = 0x98;
+constexpr auto cmdEnterLiveFish             = 0x92;
+constexpr auto cmdExitLiveFish              = 0x93;
+constexpr auto cmdSupportLaunchpad          = 0x94;
+constexpr auto cmd3PortEthSwitchStatus      = 0x95;
+constexpr auto cmdForceSocHardRst           = 0x96;
+constexpr auto cmdTorSwitchGetMode          = 0x97;
+constexpr auto cmdTorSwitchSetMode          = 0x98;
+constexpr auto cmdNetworkReprovisioning     = 0x99;
 } // namespace app
 
 namespace misc

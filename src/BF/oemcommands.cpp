@@ -410,6 +410,27 @@ namespace ipmi
 
     }
 
+    ipmi::RspType<> ipmiNetworkReprovisioning() {
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        try
+        {
+            auto method = dbus->new_method_call("xyz.openbmc_project.Software.BMC.GoldenImageUpdateService",
+                                                "/xyz/openbmc_project/host0/software/goldenimageupdater",
+                                                "xyz.openbmc_project.Common.GoldenImageUpdater", 
+                                                "StartGoldenImageReprovisioning");
+
+            dbus->call_noreply(method); 
+            return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmiNetworkReprovisioning error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+        
+    }
+
     ipmi::RspType<uint8_t>
     ipmiBFResetControl(uint8_t resetOption)
     {
@@ -1036,6 +1057,11 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdTorSwitchSetMode,
                           ipmi::Privilege::Admin, ipmi::ipmicmdTorSwitchSetMode);
+
+    // < Start DPU Network-Based Reprovisioning >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNetworkReprovisioning,
+                          ipmi::Privilege::sysIface, ipmi::ipmiNetworkReprovisioning);
 
     return;
 }
