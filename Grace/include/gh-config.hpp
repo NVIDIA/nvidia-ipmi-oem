@@ -38,8 +38,7 @@ constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor
                                               "xyz.openbmc_project.mcutempsensor "
                                               "xyz.openbmc_project.psusensor "
                                               "nvidia-gpu-manager "
-                                              "xyz.openbmc_project.fansensor"
-					      "pldmd"
+                                              "xyz.openbmc_project.fansensor "
 					      "xyz.openbmc_project.nvmesensor";
 
 constexpr auto fpgaMidSSDLedReadyMove   = 0x0e;

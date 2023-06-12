@@ -74,6 +74,10 @@ static constexpr const char* bmcStateReadyStr =
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
 const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
 
+// PLDM policy in dbus
+const char* pldmPollingObj = "/xyz/openbmc_project/pldm/sensor_polling";
+const char* pldmPollingIntf = "xyz.openbmc_project.Object.Enable";
+
 // Network object in dbus
 static constexpr auto networkServiceName = "xyz.openbmc_project.Network";
 static constexpr auto networkConfigObj = "/xyz/openbmc_project/network/config";
@@ -594,12 +598,23 @@ ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)
 
 ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
 {
+
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    auto pldmService = ipmi::getService(*dbus, pldmPollingIntf, pldmPollingObj);
+
     if (mode == 0x00)
     {
         /* stop services that scan sensors */
         std::string stopSensorScan = "systemctl stop ";
         stopSensorScan += nvidia::sensorScanSerivcesList;
         auto r = system(stopSensorScan.c_str());
+        
+        /* Stop polling PLDM sensors */
+        ipmi::setDbusProperty(*dbus, pldmService, pldmPollingObj,
+                                            pldmPollingIntf, "Enabled",bool(false));
+   
+
+        
         if (r != 0)
         {
             /* log that the stop failed */
@@ -607,8 +622,10 @@ ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
                 "ipmiSensorScanEnableDisable: failed to stop services");
             return ipmi::responseResponseError();
         }
+        
         return ipmi::responseSuccess();
     }
+
     else if (mode == 0x01)
     {
         /* start services */
@@ -616,15 +633,25 @@ ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
         startSensorScan += nvidia::sensorScanSerivcesList;
         auto r = system(startSensorScan.c_str());
 
+        /* Start polling PLDM sensors */
+        ipmi::setDbusProperty(*dbus, pldmService, pldmPollingObj,
+                                            pldmPollingIntf, "Enabled",bool(true));
+
+        
         if (r != 0)
         {
-            /* log that the stop failed */
+            /* log that the start failed */
             phosphor::logging::log<level::ERR>(
                 "ipmiSensorScanEnableDisable: failed to start services");
             return ipmi::responseResponseError();
         }
+
+        
         return ipmi::responseSuccess();
     }
+
+
+
     return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
@@ -1841,14 +1868,6 @@ ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
     ec = ipmi::getDbusProperty(ctx, objInfo.second, objInfo.first, bmcStateIntf,
                                currentBmcStateProp, bmcState);
     if (ec)
-    {
-        phosphor::logging::log<level::ERR>(
-            "ipmiGetBMCBootComplete: Failed to get CurrentBMCState property",
-            phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
-        return ipmi::responseResponseError();
-    }
-
-    if (bmcState == bmcStateReadyStr)
     {
         return ipmi::responseSuccess(static_cast<uint8_t>(0));
     }
