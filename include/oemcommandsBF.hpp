@@ -25,6 +25,7 @@ constexpr auto enumTorSwitchAllowAll     = 0x00;
 constexpr auto enumTorSwitchAllowBMC     = 0x01;
 constexpr auto enumTorSwitchAllowDPU     = 0x02;
 constexpr auto enumTorSwitchDenyNone     = 0x1F;
+constexpr auto enumTorSwitchDisabled     = 0x2F;
 
 namespace app
 {

@@ -750,6 +750,11 @@ namespace ipmi
             {
                 return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchDenyNone);
             }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.Disabled")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchDisabled);
+            }
 
             log<level::ERR>("ipmicmdTorSwitchGetMode: Invalid Mode");
             return ipmi::responseResponseError();
@@ -780,6 +785,9 @@ namespace ipmi
                 break;
             case ipmi::nvidia::enumTorSwitchDenyNone:
                 strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.None";
+                break;
+            case ipmi::nvidia::enumTorSwitchDisabled:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.Disabled";
                 break;
             default:
                 log<level::ERR>("ipmicmdTorSwitchGetMode: Invalid Mode");
@@ -1056,7 +1064,7 @@ void registerNvOemPlatformFunctions()
     // < Tor Switch Mode Set >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdTorSwitchSetMode,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdTorSwitchSetMode);
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdTorSwitchSetMode);
 
     // < Start DPU Network-Based Reprovisioning >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
