@@ -54,6 +54,8 @@ void registerNvOemPlatformFunctions() __attribute__((constructor(102)));
 
 using namespace phosphor::logging;
 
+constexpr uint8_t localChannel = 0x08;
+
 using GetSubTreeType = std::vector<
     std::pair<std::string,
         std::vector<std::pair<std::string, std::vector<std::string>>>>>;
@@ -410,7 +412,11 @@ namespace ipmi
 
     }
 
-    ipmi::RspType<> ipmiNetworkReprovisioning() {
+    ipmi::RspType<> ipmiNetworkReprovisioning(ipmi::Context::ptr ctx) {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
         try
         {
@@ -771,6 +777,10 @@ namespace ipmi
     ipmi::RspType<uint8_t> ipmicmdTorSwitchSetMode(ipmi::Context::ptr ctx,
                                                    uint8_t parameter)
     {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }
         std::string strValue;
         switch(parameter)
         {
