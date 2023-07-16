@@ -44,7 +44,8 @@ constexpr auto cmdNetworkReprovisioning     = 0x99;
 
 namespace misc
 {
-
+    constexpr auto cmdGetBootStrapAccount = 0x02;
+    constexpr auto cmdGetBootStrapAccount_init = 0xF2;
 } // namespace misc
 
 namespace chassis
