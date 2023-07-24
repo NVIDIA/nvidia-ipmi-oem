@@ -440,18 +440,26 @@ namespace ipmi
 
     }
 
-    ipmi::RspType<> ipmiNetworkReprovisioning(ipmi::Context::ptr ctx) {
+    ipmi::RspType<> ipmiNetworkReprovisioning(ipmi::Context::ptr ctx, uint8_t golden_image_timeout, uint8_t timeout_from_network) {
         if (ctx->channel != localChannel){
             log<level::ERR>("Running the command is allowed only from BMC");
             return ipmi::response(ipmi::ccResponseError);
+        }                
+        if (golden_image_timeout == 0){
+            golden_image_timeout=15;
+        }
+        if (timeout_from_network == 0){
+            timeout_from_network=60;
         }
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
         try
         {
+            
             auto method = dbus->new_method_call("xyz.openbmc_project.Software.BMC.GoldenImageUpdateService",
                                                 "/xyz/openbmc_project/host0/software/goldenimageupdater",
                                                 "xyz.openbmc_project.Common.GoldenImageUpdater", 
                                                 "StartGoldenImageReprovisioning");
+            method.append(golden_image_timeout, timeout_from_network);
 
             dbus->call_noreply(method); 
             return ipmi::responseSuccess();
