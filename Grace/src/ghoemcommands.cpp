@@ -2053,7 +2053,21 @@ return ipmi::response(ipmi::ccInvalidFieldRequest);
 
 }
 
-
+ipmi::RspType<uint8_t> ipmiStandbyPowerCycle()
+{
+    int response;
+    std::string standbyPowerCycle = "stbypowerctrl.sh aux_cycle";
+    phosphor::logging::log<level::INFO>(
+        "Starting standby power cycle");
+    auto r = system(standbyPowerCycle.c_str());
+    if (r != 0)
+    {
+        phosphor::logging::log<level::ERR>(
+            "Standby Power Cycle Error: Could not complete standby power cycle");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    return ipmi::response(ipmi::ccSuccess);
+}
 
 } // namespace ipmi
 
@@ -2317,7 +2331,14 @@ void registerNvOemFunctions()
                           ipmi::nvidia::chassis::cmdStandByPower,
                           ipmi::Privilege::Admin, ipmi::ipmicmdStandByPowerOnOff);
 
+    // <Standby Power Cycle>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::chassis::cmdStandbyPowerCycle));
 
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::chassis::cmdStandbyPowerCycle,
+                          ipmi::Privilege::Admin, ipmi::ipmiStandbyPowerCycle);
 
     return;
 }
