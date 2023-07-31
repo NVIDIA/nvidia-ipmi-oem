@@ -453,8 +453,10 @@ namespace ipmi
         
     }
 
+    ipmi::RspType<uint8_t> ipmicmdTorSwitchSetMode(ipmi::Context::ptr ctx, uint8_t parameter);
+    
     ipmi::RspType<uint8_t>
-    ipmiBFResetControl(uint8_t resetOption)
+    ipmiBFResetControl(ipmi::Context::ptr ctx, uint8_t resetOption)
     {
         int response;
         switch(resetOption)
@@ -464,6 +466,8 @@ namespace ipmi
                 break;
             case 0x03: // tor eswitch reset
                 response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "do_tor_eswitch_reset");
+                if(!response) // switch returns to a default mode after a reset- need to change the mode of TorSwitchPortsMode to that mode (0x00)
+                    ipmicmdTorSwitchSetMode(ctx, ipmi::nvidia::enumTorSwitchAllowAll);
                 break;
             case 0x04: // arm hard reset - nsrst - secondary DPU
                 response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "bf2_nic_bmc_ctrl1");
