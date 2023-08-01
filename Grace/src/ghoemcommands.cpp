@@ -41,6 +41,7 @@
 #include <sdbusplus/bus.hpp>
 #include <xyz/openbmc_project/Software/Activation/server.hpp>
 #include <xyz/openbmc_project/Software/Version/server.hpp>
+#include <boost/format.hpp>
 
 #include <algorithm>
 #include <array>
@@ -955,7 +956,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
     std::ifstream jsonFile(channelConfigDefaultFilename);
     if (!jsonFile.good())
     {
-        log<level::INFO>("JSON file not found",
+        log<level::ERR>("JSON file not found",
                          entry("FILE_NAME=%s", channelConfigDefaultFilename));
         return ipmi::responseResponseError();
     }
@@ -967,7 +968,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
     }
     catch (const nlohmann::json::parse_error& e)
     {
-        log<level::DEBUG>("Corrupted channel config.",
+        log<level::ERR>("Corrupted channel config.",
                           entry("MSG=%s", e.what()));
         return ipmi::responseResponseError();
     }
@@ -984,7 +985,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
                 (jsonChData[nameString].get<std::string>() !=
                  redfishHostInterfaceChannel))
             {
-                log<level::WARNING>(
+                log<level::DEBUG>(
                     "Channel not configured for Redfish Host Interface",
                     entry("CHANNEL_NUM=%d", chNum));
                 continue;
@@ -1012,7 +1013,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
         }
         catch (const nlohmann::json::parse_error& e)
         {
-            log<level::DEBUG>("Json Exception caught.",
+            log<level::ERR>("Json Exception caught.",
                               entry("MSG=%s", e.what()));
             return ipmi::responseResponseError();
         }
@@ -1028,7 +1029,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
 bool getRfUuid(std::string& rfUuid)
 {
     std::ifstream persistentDataFilePath(
-        "/home/root/bmcweb_persistent_data.json");
+        "/var/lib/bmcweb/bmcweb_persistent_data.json");
     if (persistentDataFilePath.is_open())
     {
         auto data =
@@ -1593,6 +1594,10 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccount(ipmi::Context::ptr ctx,
                             uint8_t disableCredBootStrap)
 {
+    uint64_t oemStart = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
     try
     {
         // Check the CredentialBootstrapping property status,
@@ -1707,6 +1712,15 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                   std::back_inserter(respUserNameBuf));
         std::copy(password.begin(), password.end(),
                   std::back_inserter(respPasswordBuf));
+        uint64_t oemEnd = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count());
+        std::string info =
+            (boost::format("ipmiGetBootStrapAccount exe_time=%dms") %
+             (oemEnd - oemStart))
+                .str();
+        log<level::INFO>(info.c_str());
         return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
     }
     catch (const std::exception& e)
