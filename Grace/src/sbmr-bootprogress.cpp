@@ -31,7 +31,9 @@ ipmi::RspType<uint8_t> ipmiSbmrSendBootProgressCode(
     if ((chInfo.mediumType !=
          static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20)) &&
         (chInfo.mediumType !=
-         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)))
+         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)) &&
+        (chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::oem)))
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmiSbmrSendBootProgressCode: Error - supported only in SSIF "
