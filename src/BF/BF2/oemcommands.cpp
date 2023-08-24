@@ -67,6 +67,11 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
+    ipmi::RspType<>nicManagerBF2NA()
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Nic Manager not supported in Bluefield 2");
+        return ipmi::response(ipmi::ccResponseError);
+    }
 
 } // namespace ipmi
 
@@ -89,7 +94,38 @@ void registerNvOemPlatformFunctionsBF2()
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdExitLiveFish,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdExitLiveFishBF2); 
+                          ipmi::Privilege::Admin, ipmi::ipmicmdExitLiveFishBF2);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetStrap,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetHostAccess,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetSmartnicMode,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetHostAccess,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetSmartnicMode,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetOsState,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetExternalHostPrivileges,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetExternalHostPrivilege,
+                          ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
     return;
 
 

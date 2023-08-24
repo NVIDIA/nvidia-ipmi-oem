@@ -37,6 +37,8 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <unordered_map>
+
 const char* systemdServiceBf = "org.freedesktop.systemd1";
 const char* systemdUnitIntfBf = "org.freedesktop.systemd1.Unit";
 const char* rshimSystemdObjBf = "/org/freedesktop/systemd1/unit/rshim_2eservice";
@@ -61,6 +63,71 @@ static constexpr const char* biosConfigMgrPath =
 static constexpr const char* biosConfigMgrIface =
     "xyz.openbmc_project.BIOSConfig.Manager";
 static constexpr const char* createUserMethod = "CreateUser";
+
+static const std::vector<std::string> nicExternalHostPrivileges = {
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FLASH_ACCESS",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FW_UPDATE",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NIC_RESET",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_GLOBAL",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_HOST",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_INTERNAL_CPU",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_PORT",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_PCC_UPDATE"
+            };
+
+const char* connectxSevice = "xyz.openbmc_project.Settings.connectx";
+const char* connectxSmartnicModeObj = "/xyz/openbmc_project/network/connectx/smartnic_mode/smartnic_mode/INTERNAL_CPU_OFFLOAD_ENGINE";
+const char* connectxHostAccessObj = "/xyz/openbmc_project/network/connectx/host_access/HOST_PRIV_RSHIM";
+const char* connectxSmartnicOsState = "/xyz/openbmc_project/network/connectx/smartnic_os_state/os_state";
+
+struct PropertyInfo
+{
+    const char* intf;
+    const char* prop;
+    const std::unordered_map<std::string,int> strToInt;
+    const std::unordered_map<int,std::string> intToStr;
+};
+
+const PropertyInfo nicAttributeInfo = {
+    .intf = "xyz.openbmc_project.Control.NicAttribute",
+    .prop = "NicAttribute",
+    .strToInt = {{"xyz.openbmc_project.Control.NicAttribute.Modes.Enabled", 1},
+                {"xyz.openbmc_project.Control.NicAttribute.Modes.Disabled", 0},
+                {"xyz.openbmc_project.Control.NicAttribute.Modes.Invaild", -1}},
+    .intToStr = {{1, "xyz.openbmc_project.Control.NicAttribute.Modes.Enabled"},
+                {0, "xyz.openbmc_project.Control.NicAttribute.Modes.Disabled"}}
+};
+
+const PropertyInfo nicTristateAttributeInfo = {
+    .intf = "xyz.openbmc_project.Control.NicTristateAttribute",
+    .prop = "NicTristateAttribute",
+    .strToInt = {{"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Default", 0},
+                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Enabled", 1},
+                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Disabled", 2},
+                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Invaild", -1}},
+    .intToStr = {{0, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Default"},
+                 {1, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Enabled"},
+                 {2, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Disabled"}}
+};
+
+const PropertyInfo smartNicOsStateInfo = {
+    .intf = "xyz.openbmc_project.Control.SmartNicOsState",
+    .prop = "SmartNicOsState",
+    .strToInt = {{"xyz.openbmc_project.Control.SmartNicOsState.Modes.BootRom", 0},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.BL2", 1},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.BL31", 2},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.UEFI", 3},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsStarting", 4},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsIsRunning", 5},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.LowPowerStandby", 6},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FirmwareUpdateInProgress", 7},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsCrashDumpInProgress", 8},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsCrashDumpIsComplete", 9},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FWFaultCrashDumpInProgress", 10},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FWFaultCrashDumpIsComplete", 11},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.Invalid", -1}},
+    .intToStr = {}
+};
 
 void registerNvOemPlatformFunctions() __attribute__((constructor(102)));
 
@@ -606,7 +673,6 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-
     ipmi::RspType<uint8_t> ipmiOemGetSSDLedBF(uint8_t type, uint8_t instance)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetSSDLed command is unsupported in Bluefield 2/3");
@@ -632,17 +698,11 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-
-
     ipmi::RspType<uint16_t, uint16_t, uint8_t> ipmiOemPsuPowerBF(uint8_t type, uint8_t id) 
     {
         phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemPsuPower command is unsupported in Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
-
-
-
-
 
     ipmi::RspType<> ipmiBiosSetVersionBF(uint8_t major, uint8_t minor) 
     {
@@ -693,8 +753,6 @@ namespace ipmi
         phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetUsbSerialNum command is unsupported in Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
-
-    
 
     ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHiBF()
     {
@@ -1327,6 +1385,211 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             usersDeleteIface, "Delete");
         return ret;
     }
+
+    // read property return value as int, using propertyInfo to map string
+    // property to int, regarding negative as error
+    static int readPropToInt(ipmi::Context::ptr ctx, const char* service,
+                             const char* obj, const PropertyInfo& propertyInfo)
+    {
+        auto method = ctx->bus->new_method_call(service, obj,
+                                                dbusPropertyInterface, "Get");
+
+        method.append(propertyInfo.intf, propertyInfo.prop);
+
+        auto reply = ctx->bus->call(method);
+
+        if (reply.is_method_error())
+        {
+        return -1;
+        }
+        std::variant<std::string> variantValue;
+        reply.read(variantValue);
+
+        auto strValue = std::get<std::string>(variantValue);
+        auto ret = propertyInfo.strToInt.find(strValue);
+        return ret != propertyInfo.strToInt.end() ? ret->second : -1;
+    }
+
+    // read property return value as int, using propertyInfo to map int to
+    // string property
+    static int writeIntToProp(ipmi::Context::ptr ctx, const char* service,
+                              const char* obj, const PropertyInfo& propertyInfo,
+                              int input)
+    {
+        auto it = propertyInfo.intToStr.find(input);
+        if (it == propertyInfo.intToStr.end())
+        {
+        return -1;
+        }
+
+        std::variant<std::string> variantValue(it->second);
+        auto method = ctx->bus->new_method_call(service, obj,
+                                                dbusPropertyInterface, "Set");
+
+        method.append(propertyInfo.intf, propertyInfo.prop, variantValue);
+
+        auto reply = ctx->bus->call(method);
+        return 0;
+    }
+
+    ipmi::RspType<uint8_t> simplePropertyGet(ipmi::Context::ptr ctx,
+                                             const char* service,
+                                             const char* obj,
+                                             const PropertyInfo& propertyInfo)
+    {
+        try
+        {
+        auto val = readPropToInt(ctx, service, obj, propertyInfo);
+        if (val < 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                (std::string(obj) + " get invalid value").c_str());
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess(val);
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(obj) + " get failed").c_str());
+        return ipmi::responseResponseError();
+        }
+    }
+
+    ipmi::RspType<> simplePropertySet(ipmi::Context::ptr ctx,
+                                      const char* service, const char* obj,
+                                      const PropertyInfo& propertyInfo,
+                                      int input)
+    {
+        try
+        {
+        auto val = writeIntToProp(ctx, service, obj, propertyInfo, input);
+        if (val < 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                (std::string(obj) + "set invalid value").c_str());
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(obj) + "set failed").c_str());
+        return ipmi::responseResponseError();
+        }
+    }
+
+    auto ipmicmdNicGetSmartnicMode = [](ipmi::Context::ptr ctx) {
+        return simplePropertyGet(ctx, connectxSevice, connectxSmartnicModeObj,
+                                 nicAttributeInfo);
+    };
+    auto ipmicmdNicGetHostAccess = [](ipmi::Context::ptr ctx) {
+        return simplePropertyGet(ctx, connectxSevice, connectxHostAccessObj,
+                                 nicAttributeInfo);
+    };
+    auto ipmicmdNicSetSmartnicMode = [](ipmi::Context::ptr ctx, uint8_t val) {
+        return simplePropertySet(ctx, connectxSevice, connectxSmartnicModeObj,
+                                 nicAttributeInfo, val);
+    };
+    auto ipmicmdNicSetHostAccess = [](ipmi::Context::ptr ctx, uint8_t val) {
+        return simplePropertySet(ctx, connectxSevice, connectxHostAccessObj,
+                                 nicAttributeInfo, val);
+    };
+    auto ipmicmdNicGetOsState = [](ipmi::Context::ptr ctx) {
+        return simplePropertyGet(ctx, connectxSevice, connectxSmartnicOsState,
+                                 smartNicOsStateInfo);
+    };
+    auto ipmicmdNicSetExternalHostPrivilege = [](ipmi::Context::ptr ctx,
+                                                 uint8_t idx, uint8_t val) {
+        return idx < nicExternalHostPrivileges.size()
+                   ? simplePropertySet(ctx, connectxSevice,
+                                       nicExternalHostPrivileges[idx].c_str(),
+                                       nicTristateAttributeInfo, val)
+                   : ipmi::responseInvalidFieldRequest();
+    };
+
+    ipmi::RspType<std::vector<uint8_t>>
+        ipmicmdNicGetExternalHostPrivileges(ipmi::Context::ptr ctx)
+    {
+        std::vector<uint8_t> res(nicExternalHostPrivileges.size(), 0);
+        try
+        {
+        for (int i = 0; i < nicExternalHostPrivileges.size(); ++i)
+        {
+            auto val = readPropToInt(ctx, connectxSevice,
+                                     nicExternalHostPrivileges[i].c_str(),
+                                     nicTristateAttributeInfo);
+            if (val < 0)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    (std::string(__func__) + " invalid value").c_str());
+                return ipmi::responseResponseError();
+            }
+            res[i] = val;
+        }
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(__func__) + " Failed").c_str());
+        return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess(res);
+    }
+
+    ipmi::RspType<uint8_t, std::vector<uint8_t>, std::vector<uint8_t>>
+        ipmicmdNicGetStrap(ipmi::Context::ptr ctx)
+    {
+
+        static const std::vector<std::string> strapFields = {
+            "DISABLE_INBAND_RECOVER",
+            "PRIMARY_IS_PCORE_1",
+            "2PCORE_ACTIVE",
+            "SOCKET_DIRECT",
+            "PCI_REVERSAL",
+            "PCI_PARTITION_1",
+            "PCI_PARTITION_0",
+            "OSC_FREQ_1",
+            "OSC_FREQ_0",
+            "CORE_BYPASS_N",
+            "FNP"};
+
+        const std::string connectxStrapMask =
+            "/xyz/openbmc_project/network/connectx/strap_options/mask/";
+        const std::string connectxStrapVal =
+            "/xyz/openbmc_project/network/connectx/strap_options/"
+            "strap_options/";
+        std::vector<uint8_t> resVal(strapFields.size(), 0);
+        std::vector<uint8_t> resMask(strapFields.size(), 0);
+        try
+        {
+        for (int i = 0; i < strapFields.size(); ++i)
+        {
+            auto val = readPropToInt(
+                ctx, connectxSevice,
+                (connectxStrapVal + strapFields[i]).c_str(), nicAttributeInfo);
+            auto mask = readPropToInt(
+                ctx, connectxSevice,
+                (connectxStrapMask + strapFields[i]).c_str(), nicAttributeInfo);
+            if (val < 0 || mask < 0)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    (std::string(__func__) + " invalid value").c_str());
+                return ipmi::responseResponseError();
+            }
+            resVal[i] = val;
+            resMask[i] = mask;
+        }
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(__func__) + " Failed").c_str());
+        return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess(0, resVal, resMask);
+    }
 } // namespace ipmi
 
 void registerNvOemPlatformFunctions()
@@ -1583,5 +1846,36 @@ void registerNvOemPlatformFunctions()
                                ipmi::nvidia::misc::cmdCreateBootStrapAccount,
                                ipmi::Privilege::Admin,
                                ipmi::ipmiCreateBootStrapAccountBF);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetStrap,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetStrap);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetHostAccess,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetHostAccess);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetSmartnicMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetSmartnicMode);
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetHostAccess,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicSetHostAccess);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetSmartnicMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicSetSmartnicMode);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetOsState,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetOsState);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetExternalHostPrivileges,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetExternalHostPrivileges);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetExternalHostPrivilege,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicSetExternalHostPrivilege);
     return;
 }
