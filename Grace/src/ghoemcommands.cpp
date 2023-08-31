@@ -1869,6 +1869,14 @@ ipmi::RspType<uint8_t> ipmiGetBMCBootComplete(ipmi::Context::ptr ctx)
                                currentBmcStateProp, bmcState);
     if (ec)
     {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBMCBootComplete: Failed to get CurrentBMCState property",
+            phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
+        return ipmi::responseResponseError();
+    }
+
+    if (bmcState == bmcStateReadyStr)
+    {
         return ipmi::responseSuccess(static_cast<uint8_t>(0));
     }
 
