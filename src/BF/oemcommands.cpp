@@ -507,7 +507,7 @@ namespace ipmi
 
     }
 
-    ipmi::RspType<> ipmiNetworkReprovisioning(ipmi::Context::ptr ctx, uint8_t golden_image_timeout, uint8_t timeout_from_network) {
+    ipmi::RspType<> ipmiNetworkReprovisioning(ipmi::Context::ptr ctx, uint8_t golden_image_timeout, uint8_t timeout_from_network, uint8_t verbosityLevel) {
         if (ctx->channel != localChannel){
             log<level::ERR>("Running the command is allowed only from BMC");
             return ipmi::response(ipmi::ccResponseError);
@@ -518,6 +518,10 @@ namespace ipmi
         if (timeout_from_network == 0){
             timeout_from_network=60;
         }
+        if (verbosityLevel > 2){
+            log<level::ERR>("Verbosity level can be a value between 0 to 2");
+            return ipmi::response(ipmi::ccResponseError);
+        }
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
         try
         {
@@ -526,7 +530,7 @@ namespace ipmi
                                                 "/xyz/openbmc_project/host0/software/goldenimageupdater",
                                                 "xyz.openbmc_project.Common.GoldenImageUpdater", 
                                                 "StartGoldenImageReprovisioning");
-            method.append(golden_image_timeout, timeout_from_network);
+            method.append(golden_image_timeout, timeout_from_network, verbosityLevel);
 
             dbus->call_noreply(method); 
             return ipmi::responseSuccess();
