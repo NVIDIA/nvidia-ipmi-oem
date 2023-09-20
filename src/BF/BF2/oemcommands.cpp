@@ -73,11 +73,23 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
+    ipmi::RspType<uint8_t> ipmicmdPowerCapGet(ipmi::Context::ptr ctx)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Power Capping not supported in Bluefield 2");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+
+    ipmi::RspType<uint8_t>ipmicmdPowerCapSet(ipmi::Context::ptr ctx, uint8_t parameter)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Power Capping not supported in Bluefield 2");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+
 } // namespace ipmi
 
 void registerNvOemPlatformFunctionsBF2()
 {
-   
+
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdEnterLiveFish));
@@ -126,6 +138,64 @@ void registerNvOemPlatformFunctionsBF2()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdNicSetExternalHostPrivilege,
                           ipmi::Privilege::Admin, ipmi::nicManagerBF2NA);
+
+    // < Power Cap Enabled Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapEnabledGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
+
+    // < Power Cap Enabled Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapEnabledSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+
+    // < Power Cap Capacity Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapCapacityWattsGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
+
+    // < Power Cap Capacity Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapCapacityWattsSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+    // < Power Allocation Percentage Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerAllocPercentageGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
+    // < Power Allocation Percentage Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerAllocPercentageSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+
+    // < Power Cap Min Capacity Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapMinCapacityWattsSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+    // < Power Cap Min Capacity Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapMinCapacityWattsGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
+
+    // < Power Cap Requested Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapRequestedWattsGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
+
+    // < Power Cap Requested Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapRequestedWattsSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+
+    // < Power Cap Allocated Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
+
+    // < Power Cap Allocated Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+
     return;
 
 
