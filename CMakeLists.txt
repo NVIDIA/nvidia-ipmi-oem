@@ -27,7 +27,11 @@ option (GH-oem-commands
 option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
-        
+
+#[[Support for Global Write-Protect FRU Edit Protection]]
+add_compile_definitions(WP_GPIO=${WP-GPIO})
+add_compile_definitions(CHIP=${WP-GPIO-CHIP})
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
