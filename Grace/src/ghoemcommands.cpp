@@ -450,10 +450,7 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
 {
     std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
                                        nvidia::fanZoneCtrlName1,
-                                       nvidia::fanZoneCtrlName2,
-                                       nvidia::fanZoneCtrlName3,
-                                       nvidia::fanZoneCtrlName4};
-
+                                       nvidia::fanZoneCtrlName2};
     /* if not valid zone, return error */
     if (zone >= nvidia::fanZones)
     {

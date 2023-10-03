@@ -27,7 +27,11 @@ option (GH-oem-commands
 option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
-        
+
+option (custom-pwm-fan
+        "To support customize platforms pwm/fan configurations"
+        OFF)
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -103,6 +107,13 @@ else()
 
     endif()
 
+endif()
+
+if(custom-pwm-fan)
+    add_compile_definitions(CUSTOM_PWM_FAN=${custom-pwm-fan})
+    add_compile_definitions(CONFIG_PWM=${config-pwm})
+    add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME1=${config-fanZoneCtrlName1})
+    add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME2=${config-fanZoneCtrlName2})
 endif()
 
 add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
