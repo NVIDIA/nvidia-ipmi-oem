@@ -530,8 +530,10 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
         std::ofstream ofs(ctrlPaths[zone]);
         if (!ofs.is_open())
         {
-            phosphor::logging::log<level::ERR>(
-                "ipmiSetFanZonePWMDuty: Failed to open hwmon pwm file");
+            std::string errString = "ipmiSetFanZonePWMDuty: Failed to open hwmon pwm file. zone = " \
+                                    + std::to_string(zone) + ", pwm = " + std::to_string(pwm);
+            phosphor::logging::log<level::WARNING>(errString.c_str());
+
             return ipmi::response(ipmi::ccResponseError);
         }
         ofs << value;
@@ -546,21 +548,33 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
 
 ipmi::RspType<uint8_t> ipmiSetAllFanZonesPWMDuty(uint8_t request)
 {
+    bool isSetFanZonePWMDutySuccess = false;
+    ipmi::RspType<uint8_t> ret = ipmi::responseSuccess();
+
     for (int i = 0; i < nvidia::fanZones; i++)
     {
         for (int j = 1; j <= nvidia::pwm; j++)
         {
-            auto r = ipmiSetFanZonePWMDuty(i, j, request);
-            if (r != ipmi::responseSuccess())
+            ret = ipmiSetFanZonePWMDuty(i, j, request);
+            if (ret == ipmi::responseSuccess())
             {
-                phosphor::logging::log<level::ERR>(
-                    "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
-                return r;
+                // Return the CC to success if at least one value is present
+                isSetFanZonePWMDutySuccess = true;
             }
         }
     }
-    return ipmi::responseSuccess();
-    ;
+
+    if (isSetFanZonePWMDutySuccess == true)
+    {
+        return ipmi::responseSuccess();
+    }
+    else
+    {
+       phosphor::logging::log<level::ERR>(
+           "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
+
+       return ret;
+    }
 }
 
 ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)

@@ -19,6 +19,9 @@
 #include <unistd.h>
 #include <string>
 
+#define STRINGIFY(x) #x
+#define STR(x) STRINGIFY(x)
+
 namespace ipmi
 {
 namespace nvidia
@@ -27,10 +30,16 @@ namespace nvidia
 constexpr auto fanServiceName               = "phosphor-pid-control";
 constexpr auto fanNoServiceSpeed            = 100;
 constexpr auto fanZones                     = 3;
-constexpr auto pwm                          = 4;
 constexpr auto fanZoneCtrlName0             = "";
+#ifdef CUSTOM_PWM_FAN
+constexpr auto pwm                          = int(CONFIG_PWM);
+constexpr auto fanZoneCtrlName1             = STR(CONFIG_FAN_ZONE_CTRL_NAME1);
+constexpr auto fanZoneCtrlName2             = STR(CONFIG_FAN_ZONE_CTRL_NAME2);
+#else
+constexpr auto pwm                          = 4;
 constexpr auto fanZoneCtrlName1             = "max31790_1";
 constexpr auto fanZoneCtrlName2             = "max31790_2";
+#endif
 
 constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor "
                                               "xyz.openbmc_project.externalsensor "

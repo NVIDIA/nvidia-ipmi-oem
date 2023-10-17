@@ -48,18 +48,18 @@ constexpr auto cmdNicGetHostAccess              = 0x9E;
 constexpr auto cmdNicSetHostAccess              = 0x9F;
 constexpr auto cmdNicGetStrap                   = 0xA2;
 constexpr auto cmdNicGetOsState                 = 0xA3;
-constexpr auto cmdPowerCapEnabledGet            = 0xA4;
-constexpr auto cmdPowerCapEnabledSet            = 0xA5;
-constexpr auto cmdPowerCapCapacityWattsGet      = 0xA6;
-constexpr auto cmdPowerCapCapacityWattsSet      = 0xA7;
-constexpr auto cmdPowerAllocPercentageGet       = 0xA8;
-constexpr auto cmdPowerAllocPercentageSet       = 0xA9;
-constexpr auto CmdPowerCapMinCapacityWattsGet   = 0xAA;
-constexpr auto CmdPowerCapMinCapacityWattsSet   = 0xAB;
-constexpr auto CmdPowerCapRequestedWattsGet     = 0xAC;
-constexpr auto CmdPowerCapRequestedWattsSet     = 0xAD;
-constexpr auto CmdPowerCapAllocatedWattsGet     = 0xAE;
-constexpr auto CmdPowerCapAllocatedWattsSet     = 0xAF;
+constexpr auto cmdPowerCapEnabledGet            = 0xC4;
+constexpr auto cmdPowerCapEnabledSet            = 0xC5;
+constexpr auto cmdPowerCapCapacityWattsGet      = 0xC6;
+constexpr auto cmdPowerCapCapacityWattsSet      = 0xC7;
+constexpr auto cmdPowerAllocPercentageGet       = 0xC8;
+constexpr auto cmdPowerAllocPercentageSet       = 0xC9;
+constexpr auto CmdPowerCapMinCapacityWattsGet   = 0xCA;
+constexpr auto CmdPowerCapMinCapacityWattsSet   = 0xCB;
+constexpr auto CmdPowerCapRequestedWattsGet     = 0xCC;
+constexpr auto CmdPowerCapRequestedWattsSet     = 0xCD;
+constexpr auto CmdPowerCapAllocatedWattsGet     = 0xCE;
+constexpr auto CmdPowerCapAllocatedWattsSet     = 0xCF;
 
 
 } // namespace app
