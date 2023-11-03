@@ -296,8 +296,12 @@ static int CheckGWPfru(std::string gpiochip, uint32_t gpio) {
     return gpio;
 }
 
+//
+//Extraction of gpiochip numeric valuesgpiochip : This function simply separates the 
+//numeric and other parts of the string and returns the numeric value(res) to be used in 
+//other GPIO operations, such as exporting, setting values, and reading values etc.
+//
 
-//Extration of gpiochip numeric values
 static constexpr int extractNumericValue(const char* str) {
     int res= 0;
     for (int i = 8; str[i] != '\0'; ++i) {
@@ -455,12 +459,13 @@ ipmi::RspType<uint8_t>
 // WP-GPIO-CHIP="gpiochip816"
 // EXTRA_OECMAKE += "-DWP-GPIO=${WP_GPIO}"
 // EXTRA_OECMAKE += "-DWP-GPIO-CHIP=${WP-GPIO-CHIP}"
+
 #ifdef WP_GPIO
 
-        static constexpr auto GWPGpoId= WP_GPIO ;
+        static constexpr auto GWPGpoId = WP_GPIO ;
         static constexpr char const *GPIO_chip = STR(CHIP);
    
-	int fruWP= CheckGWPfru(GPIO_chip,GWPGpoId);
+	int fruWP = CheckGWPfru(GPIO_chip,GWPGpoId);
 	if (fruWP < 0) 
 	{
         	phosphor::logging::log<phosphor::logging::level::ERR>(
@@ -480,7 +485,7 @@ ipmi::RspType<uint8_t>
     }
     int r;
     valueIf >> r;
-
+    valueIf.close();
     //if fru is write protected
     if(r)
     {
@@ -498,10 +503,13 @@ ipmi::RspType<uint8_t>
     {
         return ipmi::response(status);
     }
+
+    //ensuring that fruCacheTemp is not empty and carry fruCache.
     if (fruCacheTemp.empty())
     {
         fruCacheTemp = fruCache;
     }
+
     int lastWriteAddr = fruInventoryOffset + writeLen;
     if (fruCacheTemp.size() < lastWriteAddr)
     {
