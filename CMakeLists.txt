@@ -100,15 +100,13 @@ if(GH-oem-commands)
 else()    
     if(BF2-OEM-COMMANDS)
     SET (flag_library_sources
-                src/oemcommands.cpp src/sensorcommands.cpp
-                src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                src/oemcommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/BF2/oemcommands.cpp
 		src/BF/chassiscommands.cpp
     )
     elseif(BF3-OEM-COMMANDS)
     SET(flag_library_sources
-                src/oemcommands.cpp src/sensorcommands.cpp
-                src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                src/oemcommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/chassiscommands.cpp
         )
     else()
@@ -127,7 +125,12 @@ if(custom-pwm-fan)
     add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME2=${config-fanZoneCtrlName2})
 endif()
 
-add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
+if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS)
+    add_library ( znvipmioemcmds SHARED ${flag_library_sources})
+else()
+    add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
+endif()
+
 
 
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
