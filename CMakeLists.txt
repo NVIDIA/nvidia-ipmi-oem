@@ -42,6 +42,10 @@ option (custom-pwm-fan
         "To support customize platforms pwm/fan configurations"
         OFF)
 
+option (bf3-chassis-commands
+        "To support commands relevant only to BF3"
+        OFF)
+
 
 set (
     CMAKE_CXX_FLAGS
@@ -131,7 +135,9 @@ else()
     add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
 endif()
 
-
+if(bf3-chassis-commands)
+    add_definitions (-DBF3_CHASSIS_COMMAND)
+endif()
 
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (znvipmioemcmds PROPERTIES SOVERSION "0")
