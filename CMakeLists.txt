@@ -29,9 +29,14 @@ option (BF3-OEM-COMMANDS
         OFF)
 
 
-#[[Support for Global Write-Protect FRU Edit Protection]]
-add_compile_definitions(WP_GPIO=${WP-GPIO})
-add_compile_definitions(CHIP=${WP-GPIO-CHIP})
+#[[Optional support for Global Write-Protect FRU Edit Protection]]
+
+if(WP-GPIO AND WP-GPIO-CHIP)
+	
+	add_compile_definitions(WP_GPIO=${WP-GPIO})
+	add_compile_definitions(CHIP=${WP-GPIO-CHIP})
+	
+endif()
 
 option (custom-pwm-fan
         "To support customize platforms pwm/fan configurations"
