@@ -1,6 +1,5 @@
 /**
  * Copyright © 2020 NVIDIA Corporation
- *
  * License Information here...
  */
 
@@ -51,9 +50,14 @@ const char* ctlBMCtorSwitchMode = "TorSwitchPortsMode";
 const char* torSwitchModeSystemdObj = "/org/freedesktop/systemd1/unit/torswitch_2dmode_2eservice";
 
 // PowerSubSystem
-const char* powerCapacityObj = "/xyz/openbmc_project/control/host0/powercapacity";
-const char* powerCapacitySrvice = "xyz.openbmc_project.Settings";
-const char* powerCapacityInterface = "xyz.openbmc_project.Control.PowerSubsystem.Capacity";
+const char* powerCapacityObj = "/xyz/openbmc_project/control/host0/PowerLimit_0";
+const char* powerCapacitySrvice = "com.Nvidia.Powermanager";
+const char* powerCapacityInterface = "xyz.openbmc_project.Control.Power.Cap";
+const char* powerCapacityModeInterface = "xyz.openbmc_project.Control.Power.Mode";
+const char* powerSubsysObj = "/xyz/openbmc_project/control/host0/powercapacity";
+const char* powerSubsysSrvice = "xyz.openbmc_project.Settings";
+const char* powerSubsysInterface = "xyz.openbmc_project.Control.PowerSubsystem.Capacity";
+
 // User Manager object in dbus
 static constexpr const char* userMgrObjBasePath = "/xyz/openbmc_project/user";
 static constexpr const char* userMgrInterface =
@@ -1599,8 +1603,7 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                                                     powerCapacityObj,
                                                     dbusPropertyInterface,
                                                     "Get");
-            method.append(powerCapacityInterface,
-                          "AllocationEnable");
+            method.append(powerCapacityModeInterface, "PowerMode");
             auto reply = ctx->bus->call(method);
             if (reply.is_method_error())
             {
@@ -1608,15 +1611,16 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                 return ipmi::responseResponseError();
             }
 
-            std::variant<bool> variantValue;
+            std::variant<std::string> variantValue;
             reply.read(variantValue);
 
-            auto bValue = std::get<bool>(variantValue);
-            if (bValue)
+            auto strValue = std::get<std::string>(variantValue);
+            if (strValue ==
+                "xyz.openbmc_project.Control.Power.Mode.PowerMode.Static")
             {
-                return ipmi::responseSuccess(0x01);
+                return ipmi::responseSuccess(0x00);
             }
-            return ipmi::responseSuccess(0x00);
+            return ipmi::responseSuccess(0x01);
         }
         catch (const std::exception& e)
         {
@@ -1628,20 +1632,28 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
 
     ipmi::RspType<uint8_t> ipmicmdPowerCapEnabledSet(ipmi::Context::ptr ctx, uint8_t parameter)
     {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+        std::string strValue;
+        if (parameter == 1)
+        {
+            strValue = "xyz.openbmc_project.Control.Power.Mode.PowerMode.PowerSaving";
+        }
+        else
+        {
+            strValue = "xyz.openbmc_project.Control.Power.Mode.PowerMode.Static";
+        }
+
         try
         {
-            if (ctx->channel != localChannel){
-                log<level::ERR>("Running the command is allowed only from BMC");
-                return ipmi::response(ipmi::ccResponseError);
-            }
+            std::variant<std::string> variantValue(strValue);
             auto method = ctx->bus->new_method_call(powerCapacitySrvice,
                                                     powerCapacityObj,
-                                                    dbusPropertyInterface,
-                                                    "Set");
-            std::variant<bool> variantValue = (parameter != 0);
-            method.append(powerCapacityInterface,
-                          "AllocationEnable", variantValue);
-
+                                                   dbusPropertyInterface,
+                                                  "Set");
+            method.append(powerCapacityModeInterface, "PowerMode", variantValue);
             auto reply = ctx->bus->call(method);
             if (reply.is_method_error())
             {
@@ -1653,104 +1665,6 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         catch (const std::exception& e)
         {
             log<level::ERR>("ipmicmdPowerCapEnabledSet error",
-                            entry("ERROR=%s", e.what()));
-            return ipmi::response(ipmi::ccResponseError);
-        }
-    }
-
-    ipmi::RspType<uint8_t> ipmicmdPowerAllocPercentageGet(ipmi::Context::ptr ctx)
-    {
-        try
-        {
-            auto method = ctx->bus->new_method_call(powerCapacitySrvice,
-                                                    powerCapacityObj,
-                                                    dbusPropertyInterface,
-                                                    "Get");
-            method.append(powerCapacityInterface,
-                          "AllocationPercentage");
-            auto reply = ctx->bus->call(method);
-            if (reply.is_method_error())
-            {
-                log<level::ERR>("ipmicmdPowerAllocPercentageGet: Get Dbus error");
-                return ipmi::responseResponseError();
-            }
-
-            std::variant<uint8_t> variantValue;
-            reply.read(variantValue);
-
-            auto percentageValue = std::get<uint8_t>(variantValue);
-            return ipmi::responseSuccess(percentageValue);
-        }
-        catch (const std::exception& e)
-        {
-            log<level::ERR>("ipmicmdPowerAllocPercentageGet error",
-                            entry("ERROR=%s", e.what()));
-            return ipmi::response(ipmi::ccResponseError);
-        }
-    }
-
-/**
- * @brief Set the power allocation percentage using D-Bus.
- *
- * This function is responsible for setting the power allocation percentage
- * using the D-Bus protocol. It allows changes to the allocation percentage
- * of power and is intended to be executed only from the BMC (Baseboard
- * Management Controller) channel.
- *
- * @param ctx         A pointer to the IPMI context, which includes information
- *                   about the D-Bus connection, channel, and other context-related data.
- * @param parameter   The new power allocation percentage value to be set.
- *
- * @return An instance of ipmi::RspType<> representing the result of the operation.
- *         If the operation is successful, it returns a success response.
- *         If the command is not executed from the BMC channel, it returns an error response.
- *         If there are any exceptions or D-Bus errors, it also returns an error response.
- *
- * @remarks This function checks if the command is being executed from the BMC channel.
- *          If it's not, it logs an error and returns an error response, as this command
- *          should only be run from the BMC for safety and security reasons.
- *          It constructs a D-Bus method call to set the power allocation percentage and
- *          sends the request to the appropriate D-Bus service and object.
- *          If the D-Bus call results in an error, it logs the error and returns an error
- *          response. If the operation is successful, it returns a success response.
- */
-
-static ipmi::RspType<> ipmicmdPowerAllocPercentageSet(
-                                                ipmi::Context::ptr ctx,
-                                                uint8_t parameter)
-    {
-        try
-        {
-            if (ctx->channel != localChannel){
-                log<level::ERR>("Running the command is allowed only from BMC");
-                return ipmi::response(ipmi::ccResponseError);
-            }
-
-            /* percentage value validation */
-            if (parameter > 100)
-            {
-                log<level::ERR>("ipmicmdPowerAllocPercentageSet: Invalid percentage value, valid range [0,100].");
-                return ipmi::responseResponseError();
-            }
-            auto method = ctx->bus->new_method_call(powerCapacitySrvice,
-                                                    powerCapacityObj,
-                                                    dbusPropertyInterface,
-                                                    "Set");
-            std::variant<uint8_t> variantValue = parameter;
-
-            method.append(powerCapacityInterface,
-                          "AllocationPercentage", variantValue);
-            auto reply = ctx->bus->call(method);
-            if (reply.is_method_error())
-            {
-                log<level::ERR>("ipmicmdPowerAllocPercentageSet: Get Dbus error");
-                return ipmi::responseResponseError();
-            }
-            return ipmi::responseSuccess();
-        }
-        catch (const std::exception& e)
-        {
-            log<level::ERR>("ipmicmdPowerAllocPercentageSet error",
                             entry("ERROR=%s", e.what()));
             return ipmi::response(ipmi::ccResponseError);
         }
@@ -1778,17 +1692,21 @@ static ipmi::RspType<> ipmicmdPowerAllocPercentageSet(
  *          any exceptions or D-Bus errors, it logs the error and returns an
  *          error response.
  */
+
 static ipmi::RspType<uint32_t> ipmicmdPowerCapGenericGet(
                                             ipmi::Context::ptr ctx,
-                                            const char* property)
+                                            const char* property,
+                                            const char* object,
+                                            const char* service,
+                                            const char* interface)
     {
         try
         {
-            auto method = ctx->bus->new_method_call(powerCapacitySrvice,
-                                                    powerCapacityObj,
+            auto method = ctx->bus->new_method_call(service,
+                                                    object,
                                                     dbusPropertyInterface,
                                                     "Get");
-            method.append(powerCapacityInterface,
+            method.append(interface,
                           property);
             auto reply = ctx->bus->call(method);
             if (reply.is_method_error())
@@ -1796,10 +1714,8 @@ static ipmi::RspType<uint32_t> ipmicmdPowerCapGenericGet(
                 log<level::ERR>("ipmicmdPowerCapGenericGet: Get Dbus error");
                 return ipmi::responseResponseError();
             }
-
             std::variant<uint32_t> variantValue;
             reply.read(variantValue);
-
             auto retValue = std::get<uint32_t>(variantValue);
             return ipmi::responseSuccess(retValue);
         }
@@ -1814,17 +1730,20 @@ static ipmi::RspType<uint32_t> ipmicmdPowerCapGenericGet(
 static ipmi::RspType<> ipmicmdPowerCapGenericSet(
                                                 ipmi::Context::ptr ctx,
                                                 const char* property,
-                                                uint8_t parameter)
+                                                uint8_t parameter,
+                                                const char* object,
+                                                const char* service,
+                                                const char* interface)
     {
         try
         {
-            auto method = ctx->bus->new_method_call(powerCapacitySrvice,
-                                                    powerCapacityObj,
+            auto method = ctx->bus->new_method_call(service,
+                                                    object,
                                                     dbusPropertyInterface,
                                                     "Set");
             std::variant<uint32_t> variantValue = parameter;
 
-            method.append(powerCapacityInterface,
+            method.append(interface,
                           property, variantValue);
             auto reply = ctx->bus->call(method);
             if (reply.is_method_error())
@@ -1842,49 +1761,102 @@ static ipmi::RspType<> ipmicmdPowerCapGenericSet(
         }
     }
 
-    ipmi::RspType<> ipmicmdPowerCapCapacityWattsSet(ipmi::Context::ptr ctx,
+    ipmi::RspType<> ipmicmdPowerCapMaxSet(ipmi::Context::ptr ctx,
+                                        uint8_t parameter)
+    {
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "MaxPowerCapValue",
+                                        parameter,
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+    ipmi::RspType<uint32_t> ipmicmdPowerCapMaxGet(ipmi::Context::ptr ctx)
+    {
+        return ipmicmdPowerCapGenericGet(ctx,
+                                        "MaxPowerCapValue",
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+
+
+    ipmi::RspType<> ipmicmdPowerCapMinSet(ipmi::Context::ptr ctx,
                                                                 uint8_t parameter)
     {
-        return ipmicmdPowerCapGenericSet(ctx, "CapacityWatts", parameter);
-    }
-    ipmi::RspType<uint32_t> ipmicmdPowerCapCapacityWattsGet(ipmi::Context::ptr ctx)
-    {
-        return ipmicmdPowerCapGenericGet(ctx, "CapacityWatts");
-    }
-
-
-    ipmi::RspType<> ipmicmdPowerCapMinCapacityWattsSet(ipmi::Context::ptr ctx,
-                                                                uint8_t parameter)
-    {
-        return ipmicmdPowerCapGenericSet(ctx, "MinCapacityWatts", parameter);
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "MinPowerCapValue",
+                                        parameter,
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
     }
 
-     ipmi::RspType<uint32_t> ipmicmdPowerCapMinCapacityWattsGet(ipmi::Context::ptr ctx)
+     ipmi::RspType<uint32_t> ipmicmdPowerCapMinGet(ipmi::Context::ptr ctx)
     {
-        return ipmicmdPowerCapGenericGet(ctx, "MinCapacityWatts");
+        return ipmicmdPowerCapGenericGet(ctx,
+                                        "MinPowerCapValue",
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
     }
-
-    ipmi::RspType<> ipmicmdPowerCapRequestedWattsSet(ipmi::Context::ptr ctx,
-                                                                uint8_t parameter)
-    {
-        return ipmicmdPowerCapGenericSet(ctx, "RequestedWatts", parameter);
-    }
-    ipmi::RspType<uint32_t> ipmicmdPowerCapRequestedWattsGet(ipmi::Context::ptr ctx)
-    {
-        return ipmicmdPowerCapGenericGet(ctx, "RequestedWatts");
-    }
-
 
     ipmi::RspType<> ipmicmdPowerCapAllocatedWattsSet(ipmi::Context::ptr ctx,
-                                                                uint8_t parameter)
+                                                               uint8_t parameter)
     {
-        return ipmicmdPowerCapGenericSet(ctx, "AllocatedWatts", parameter);
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "AllocatedWatts",
+                                        parameter,
+                                        powerSubsysObj,
+                                        powerSubsysSrvice,
+                                        powerSubsysInterface);
     }
+
     ipmi::RspType<uint32_t> ipmicmdPowerCapAllocatedWattsGet(ipmi::Context::ptr ctx)
     {
-        return ipmicmdPowerCapGenericGet(ctx, "AllocatedWatts");
+        return ipmicmdPowerCapGenericGet(ctx,
+                                        "AllocatedWatts",
+                                        powerSubsysObj,
+                                        powerSubsysSrvice,
+                                        powerSubsysInterface);
     }
+
+    static ipmi::RspType<> ipmicmdPowerPowerCapSet(ipmi::Context::ptr ctx,
+                                                   uint8_t parameter)
+    {
+        if (parameter > 100)
+        {
+            log<level::ERR>("ipmicmdPowerPowerCapSet: Invalid input,"
+                            "valid range [0,100]");
+            return ipmi::responseResponseError();
+        }
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "PowerCapPercentage",
+                                        parameter,
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+
+    static ipmi::RspType<uint8_t> ipmicmdPowerPowerCapGet(ipmi::Context::ptr ctx)
+    {
+        ipmi::RspType<uint32_t> capWattRet =
+                                        ipmicmdPowerCapGenericGet(ctx,
+                                        "PowerCapPercentage",
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+
+        if (std::get<0>(capWattRet) == ipmi::ccSuccess)
+        {
+            uint32_t value = std::get<0>(std::get<1>(capWattRet).value());
+            return ipmi::responseSuccess(static_cast<uint8_t>(value));
+        }
+        return ipmi::responseResponseError();
+    }
+
  } // namespace ipmi
+
 
 void registerNvOemPlatformFunctions()
 {
@@ -2184,40 +2156,30 @@ void registerNvOemPlatformFunctions()
 
     // < Power Cap Capacity Watts Get >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdPowerCapCapacityWattsGet,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapCapacityWattsGet);
+                          ipmi::nvidia::app::cmdPowerCapMaxGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapMaxGet);
 
     // < Power Cap Capacity Watts Set >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdPowerCapCapacityWattsSet,
-                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapCapacityWattsSet);
+                          ipmi::nvidia::app::cmdPowerCapMaxSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapMaxSet);
     // < Power Allocation Percentage Get >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdPowerAllocPercentageGet,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerAllocPercentageGet);
+                          ipmi::nvidia::app::cmdPowerPowerCapGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerPowerCapGet);
     // < Power Allocation Percentage Set >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::cmdPowerAllocPercentageSet,
-                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerAllocPercentageSet);
+                          ipmi::nvidia::app::cmdPowerPowerCapSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerPowerCapSet);
 
     // < Power Cap Min Capacity Watts Set >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapMinCapacityWattsSet,
-                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapMinCapacityWattsSet);
+                          ipmi::nvidia::app::cmdPowerCapMinSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapMinSet);
     // < Power Cap Min Capacity Watts Get >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapMinCapacityWattsGet,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapMinCapacityWattsGet);
-
-    // < Power Cap Requested Watts Get >
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapRequestedWattsGet,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapRequestedWattsGet);
-
-    // < Power Cap Requested Watts Set >
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapRequestedWattsSet,
-                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapRequestedWattsSet);
+                          ipmi::nvidia::app::cmdPowerCapMinGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapMinGet);
 
     // < Power Cap Allocated Watts Get >
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
