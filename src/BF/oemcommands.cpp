@@ -160,9 +160,18 @@ struct userInfoBuf {
 
 namespace ipmi
 {
+    constexpr int BOOTSTRAP_ACCOUNTS_NUM = 2;
     static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
-    std::array<userInfo, 2> userDatabase = {{ {"NvBluefieldUefi0", ""}, {"NvBluefieldUefi1", ""}}};
-    std::array<userInfoBuf, 2> userDatabasBuff;
+    std::array<userInfo, BOOTSTRAP_ACCOUNTS_NUM> userDatabase = {{
+        { "NvBluefieldUefi0", ""},
+        { "NvBluefieldUefi1", ""}
+    }};
+
+    std::array<userInfoBuf, 2> userDatabaseBuff = {
+        {{{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd', 'U', 'e', 'f', 'i', '0'}, {}},
+         {{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd', 'U', 'e', 'f', 'i', '1'}, {}}}
+    };
+
     static int BootStrapCurrentUserIndex = 0;
     static std::string accountService;
 
@@ -1255,37 +1264,19 @@ static void SetBootstrapPassword(int index, std::string password)
     }
 }
 
-/**
-Function:       ipmiGetBootStrapAccountInternal
-Description:    This function generates and manages credentials for a Bootstrap Account IPMI command.
-                It returns an IPMI response containing two vectors of unsigned 8-bit integers (bytes)
-                one for the generated username and the other for the generated password.
-@param ctx      A shared pointer to an ipmi::Context object,
-                providing context information for the IPMI request and response handling.
-@param disableCredBootStrap
-                An 8-bit unsigned integer representing a flag to disable Credential Bootstrapping.
-@param accountIndex
-                Account ID to create , 1 / 0.
-
-@return         The IPMI response containing the generated username and password as vectors of bytes.
-*/
-static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
-    ipmiGetBootStrapAccountInternal(ipmi::Context::ptr ctx,
-                            uint8_t disableCredBootStrap, int accountIndex)
-{
-    //setCredentialBootStrap(disableCredBootStrap);
-    return ipmi::responseSuccess(ipmi::userDatabasBuff[accountIndex].respUserNameBuf,
-                                        ipmi::userDatabasBuff[accountIndex].respPasswordBuf);
-}
-
-
 static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
                                                     uint8_t disableCredBootStrap,
                                                     uint8_t index)
 {
+    int accountIndex = static_cast<int>(index);
     try
     {
-        int accountIndex = static_cast<int>(index);
+        if (accountIndex > BOOTSTRAP_ACCOUNTS_NUM)
+        {
+            phosphor::logging::log<level::ERR>("ipmiCreateBootStrapAccountBF: Invalid index");
+            return ipmi::responseResponseError();
+        }
+
         // Check the CredentialBootstrapping property status,
         // if disabled, then reject the command with success code.
         bool isCredentialBooStrapSet = getCredentialBootStrap();
@@ -1294,6 +1285,7 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
             phosphor::logging::log<level::ERR>(
                 "ipmiCreateBootStrapAccountBF: Credential BootStrapping Disabled "
                 "Get BootStrap Account command rejected.");
+
             return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
         }
 
@@ -1314,7 +1306,6 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
         // create the new user with only redfish-hostiface group access
         auto method = dbus->new_method_call(ipmi::accountService.c_str(), userMgrObjBasePath,
                                             userMgrInterface, createUserMethod);
-
         method.append(userName, std::vector<std::string>{"redfish-hostiface"},
                     "priv-admin", true);
         auto reply = dbus->call(method);
@@ -1330,7 +1321,6 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
         int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
         if (retval != PAM_SUCCESS)
         {
-
             dbus->yield_method_call<void>(ctx->yield, ec, ipmi::accountService.c_str(),
                                           userMgrObjBasePath + userName,
                                           usersDeleteIface, "Delete");
@@ -1344,13 +1334,9 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
             // update the "CredentialBootstrap" Dbus property w.r.to
             // disable crendential BootStrap status
             setCredentialBootStrap(disableCredBootStrap);
-
-            ipmi::userDatabasBuff[accountIndex].respUserNameBuf.clear();
-            ipmi::userDatabasBuff[accountIndex].respPasswordBuf.clear();
-            std::copy(userName.begin(), userName.end(),
-                      std::back_inserter(ipmi::userDatabasBuff[accountIndex].respUserNameBuf));
+            ipmi::userDatabaseBuff[accountIndex].respPasswordBuf.clear();
             std::copy(password.begin(), password.end(),
-                      std::back_inserter(ipmi::userDatabasBuff[accountIndex].respPasswordBuf));
+                      std::back_inserter(ipmi::userDatabaseBuff[accountIndex].respPasswordBuf));
             return ipmi::responseSuccess();
         }
     }
@@ -1367,22 +1353,22 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx, uint8_t disableCredBootStrap)
     {
         //Remove the following account, and the bootstrap manager will recreate it.
-        auto ret = ipmi::responseSuccess(ipmi::userDatabasBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
-                                         ipmi::userDatabasBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf);
+        auto ret = ipmi::responseSuccess(ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
+                                         ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf);
 
         int NextAccountIndex = (ipmi::BootStrapCurrentUserIndex == 0) ? 1 : 0;
         // Switch current account
-        ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1 : 0;
 
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+
+        ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1 : 0;
+
         dbus->async_method_call(
             [](boost::system::error_code ec2, sdbusplus::message_t& m) {
                 if (ec2 || m.is_method_error())
                 {
-                    phosphor::logging::log<
-                        phosphor::logging::level::ERR>(
-                        "Error returns from call to dbus. delete user "
-                        "failed");
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Error returns from call to dbus. delete user failed");
                     return;
                 }
             },
