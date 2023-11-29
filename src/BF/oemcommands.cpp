@@ -161,6 +161,7 @@ struct userInfoBuf {
 namespace ipmi
 {
     constexpr int BOOTSTRAP_ACCOUNTS_NUM = 2;
+    const int BOOTSTRAP_PASSWORD_SIZE = 16;
     static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
     std::array<userInfo, BOOTSTRAP_ACCOUNTS_NUM> userDatabase = {{
         { "NvBluefieldUefi0", ""},
@@ -1110,7 +1111,7 @@ static bool getRandomPasswordInternal(std::string& uniqueStr)
 {
     std::ifstream randFp("/dev/urandom", std::ifstream::in);
     char byte;
-    uint8_t maxStrSize = 16;
+    uint8_t maxStrSize = BOOTSTRAP_PASSWORD_SIZE;
     std::string invalidChar = "\'\\\"";
 
     if (!randFp.is_open())
@@ -1353,15 +1354,21 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx, uint8_t disableCredBootStrap)
     {
         //Remove the following account, and the bootstrap manager will recreate it.
+        size_t passwordSize = ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf.size();
+
+        if (passwordSize != BOOTSTRAP_PASSWORD_SIZE) {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                                "ipmiGetBootStrapAccountBF : Invalid password size.",
+                                phosphor::logging::entry("SIZE= %zu", passwordSize));
+                return ipmi::responseResponseError();
+        }
         auto ret = ipmi::responseSuccess(ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
                                          ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf);
+        // Switch current account
+        ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1 : 0;
 
         int NextAccountIndex = (ipmi::BootStrapCurrentUserIndex == 0) ? 1 : 0;
-        // Switch current account
-
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-
-        ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1 : 0;
 
         dbus->async_method_call(
             [](boost::system::error_code ec2, sdbusplus::message_t& m) {
