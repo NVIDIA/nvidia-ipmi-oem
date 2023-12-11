@@ -1370,8 +1370,6 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                                          ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf);
         // Switch current account
         ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1 : 0;
-
-        int NextAccountIndex = (ipmi::BootStrapCurrentUserIndex == 0) ? 1 : 0;
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
 
         dbus->async_method_call(
@@ -1386,7 +1384,7 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             ipmi::accountService.c_str(),
             std::string(userMgrObjBasePath)
                 .append("/")
-                .append(ipmi::getBootstrapUserName(NextAccountIndex)),
+                .append(ipmi::getBootstrapUserName(ipmi::BootStrapCurrentUserIndex)),
             usersDeleteIface, "Delete");
         return ret;
     }
