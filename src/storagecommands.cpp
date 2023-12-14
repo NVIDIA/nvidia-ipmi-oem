@@ -36,6 +36,9 @@
 #include <string_view>
 #include <fstream>
 
+#define STRINGIFY(x) #x
+#define STR(x) STRINGIFY(x)
+
 static constexpr bool DEBUG = false;
 namespace ipmi
 {
@@ -59,6 +62,8 @@ constexpr static const char* fruDeviceServiceName =
 constexpr static const char* entityManagerServiceName =
     "xyz.openbmc_project.EntityManager";
 // SEL ipmi event add in dbus
+
+
 static constexpr char const *ipmiSELObj = "xyz.openbmc_project.Logging.IPMI";
 static constexpr char const *ipmiSELPath = "/xyz/openbmc_project/Logging/IPMI";
 static constexpr char const *ipmiSELAddInterface = "xyz.openbmc_project.Logging.IPMI";
@@ -70,6 +75,7 @@ constexpr static const char* chassisTypeRackMount = "23";
 constexpr static const uint8_t deassertionEvent = 0x80;
 
 static std::vector<uint8_t> fruCache;
+static std::vector<uint8_t> fruCacheTemp;
 static uint16_t cacheBus = 0xFFFF;
 static uint8_t cacheAddr = 0XFF;
 static uint8_t lastDevId = 0xFF;
@@ -88,7 +94,7 @@ boost::container::flat_map<uint8_t, std::pair<uint16_t, uint8_t>> deviceHashes;
 
 void registerStorageFunctions() __attribute__((constructor));
 
-bool writeFru()
+bool writeFru(const std::vector<uint8_t>& fru)
 {
     if (writeBus == 0xFFFF && writeAddr == 0xFF)
     {
@@ -98,7 +104,7 @@ bool writeFru()
     sdbusplus::message::message writeFru = dbus->new_method_call(
         fruDeviceServiceName, "/xyz/openbmc_project/FruDevice",
         "xyz.openbmc_project.FruDeviceManager", "WriteFru");
-    writeFru.append(writeBus, writeAddr, fruCache);
+    writeFru.append(writeBus, writeAddr, fru);
     try
     {
         sdbusplus::message::message writeFruResp = dbus->call(writeFru);
@@ -106,18 +112,26 @@ bool writeFru()
     catch (sdbusplus::exception_t&)
     {
         // todo: log sel?
+	fruCacheTemp.clear();
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "error writing fru");
         return false;
     }
     writeBus = 0xFFFF;
     writeAddr = 0xFF;
+    fruCache = fru;
+    fruCacheTemp.clear();
     return true;
+}
+
+void writeFruTemp()
+{
+    writeFru(fruCacheTemp);
 }
 
 void createTimers()
 {
-    writeTimer = std::make_unique<phosphor::Timer>(writeFru);
+    writeTimer = std::make_unique<phosphor::Timer>(writeFruTemp);
 }
 
 void recalculateHashes()
@@ -252,8 +266,50 @@ void writeFruIfRunning()
         return;
     }
     writeTimer->stop();
-    writeFru();
+    writeFru(fruCache);
 }
+
+static int CheckGWPfru(std::string gpiochip, uint32_t gpio) {
+
+    int base;
+    std::ifstream chipbase("/sys/class/gpio/" + gpiochip + "/base", std::ifstream::in);
+    if (!chipbase.is_open()) {
+        phosphor::logging::log<phosphor::logging::level::ERR>("Failed to open gpiochip base!");
+        return -1;
+    }
+
+    chipbase >> base;
+    chipbase.close();
+
+    gpio += base;
+
+    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio))) {
+        std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
+        if (!exportOf.is_open()) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpio export!");
+            return -2;
+        }
+        exportOf << gpio;
+        exportOf.close();
+    }
+    return gpio;
+}
+
+//
+//Extraction of gpiochip numeric valuesgpiochip : This function simply separates the 
+//numeric and other parts of the string and returns the numeric value(res) to be used in 
+//other GPIO operations, such as exporting, setting values, and reading values etc.
+//
+
+static constexpr int extractNumericValue(const char* str) {
+    int res= 0;
+    for (int i = 8; str[i] != '\0'; ++i) {
+        res = res * 10 + (str[i] - '0');
+    }
+    return res;
+}
+
 
 void startMatch(void)
 {
@@ -376,6 +432,7 @@ ipmi::RspType<uint8_t,             // Count
                                  requestedData);
 }
 
+
 /** @brief implements the write FRU data command
  *  @param fruDeviceId        - FRU Device ID
  *  @param fruInventoryOffset - FRU Inventory Offset to write
@@ -394,6 +451,51 @@ ipmi::RspType<uint8_t>
         return ipmi::responseInvalidFieldRequest();
     }
 
+
+// To use this option, you need to pass the WP GPIO pin and GPIO chip from 
+// the meta layer, which is 100% optional.
+// eg: 
+// WP_GPIO="70"
+// WP-GPIO-CHIP="gpiochip816"
+// EXTRA_OECMAKE += "-DWP-GPIO=${WP_GPIO}"
+// EXTRA_OECMAKE += "-DWP-GPIO-CHIP=${WP-GPIO-CHIP}"
+
+#ifdef WP_GPIO
+
+        static constexpr auto GWPGpoId = WP_GPIO ;
+        static constexpr char const *GPIO_chip = STR(CHIP);
+   
+	int fruWP = CheckGWPfru(GPIO_chip,GWPGpoId);
+	if (fruWP < 0) 
+	{
+        	phosphor::logging::log<phosphor::logging::level::ERR>(
+            	"GWPfru : Failed to export GPIO or Wrong GPIO");
+        	return ipmi::responseUnspecifiedError();
+    	}
+
+	int gpiochip_no = extractNumericValue(GPIO_chip);
+        gpiochip_no += WP_GPIO;
+	std::string res = "gpio" + std::to_string(gpiochip_no);
+
+        std::ifstream valueIf("/sys/class/gpio/"+res+"/value", std::ifstream::in);
+        if (!valueIf.is_open()) {
+        	phosphor::logging::log<phosphor::logging::level::ERR>(
+            	"GWPfru : Failed to open gpio value!");
+        	return ipmi::responseUnspecifiedError();
+    }
+    int r;
+    valueIf >> r;
+    valueIf.close();
+    //if fru is write protected
+    if(r)
+    {
+    	phosphor::logging::log<phosphor::logging::level::ERR>(
+                "GWPfru : Operation is not possble FRU is Write protected"); 
+    	return ipmi::responseCommandDisabled();
+    }
+
+#endif
+
     size_t writeLen = dataToWrite.size();
 
     ipmi::Cc status = getFru(ctx, fruDeviceId);
@@ -401,20 +503,27 @@ ipmi::RspType<uint8_t>
     {
         return ipmi::response(status);
     }
-    int lastWriteAddr = fruInventoryOffset + writeLen;
-    if (fruCache.size() < lastWriteAddr)
+
+    //ensuring that fruCacheTemp is not empty and carry fruCache.
+    if (fruCacheTemp.empty())
     {
-        fruCache.resize(fruInventoryOffset + writeLen);
+        fruCacheTemp = fruCache;
+    }
+
+    int lastWriteAddr = fruInventoryOffset + writeLen;
+    if (fruCacheTemp.size() < lastWriteAddr)
+    {
+        fruCacheTemp.resize(fruInventoryOffset + writeLen);
     }
 
     std::copy(dataToWrite.begin(), dataToWrite.begin() + writeLen,
-              fruCache.begin() + fruInventoryOffset);
+              fruCacheTemp.begin() + fruInventoryOffset);
 
     bool atEnd = false;
 
-    if (fruCache.size() >= sizeof(FRUHeader))
+    if (fruCacheTemp.size() >= sizeof(FRUHeader))
     {
-        FRUHeader* header = reinterpret_cast<FRUHeader*>(fruCache.data());
+        FRUHeader* header = reinterpret_cast<FRUHeader*>(fruCacheTemp.data());
 
         int areaLength = 0;
         int lastRecordStart = std::max(
@@ -431,9 +540,9 @@ ipmi::RspType<uint8_t>
             {
                 // The MSB in the second byte of the MultiRecord header signals
                 // "End of list"
-                endOfList = fruCache[lastRecordStart + 1] & 0x80;
+                endOfList = fruCacheTemp[lastRecordStart + 1] & 0x80;
                 // Third byte in the MultiRecord header is the length
-                areaLength = fruCache[lastRecordStart + 2];
+                areaLength = fruCacheTemp[lastRecordStart + 2];
                 // This length is in bytes (not 8 bytes like other headers)
                 areaLength += 5; // The length omits the 5 byte header
                 if (!endOfList)
@@ -450,7 +559,7 @@ ipmi::RspType<uint8_t>
             if (lastWriteAddr > (lastRecordStart + 1))
             {
                 // second byte in record area is the length
-                areaLength = fruCache[lastRecordStart + 1];
+                areaLength = fruCacheTemp[lastRecordStart + 1];
                 areaLength *= 8; // it is in multiples of 8 bytes
             }
         }
@@ -467,12 +576,11 @@ ipmi::RspType<uint8_t>
     {
         // cancel timer, we're at the end so might as well send it
         writeTimer->stop();
-        if (!writeFru())
+        if (!writeFru(fruCacheTemp))
         {
-            lastDevId = 0xFF;
             return ipmi::responseInvalidFieldRequest();
         }
-        countWritten = std::min(fruCache.size(), static_cast<size_t>(0xFF));
+        countWritten = std::min(fruCacheTemp.size(), static_cast<size_t>(0xFF));
     }
     else
     {
@@ -481,7 +589,6 @@ ipmi::RspType<uint8_t>
         writeTimer->start(std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::seconds(writeTimeoutSeconds)));
         countWritten = 0;
-        lastDevId = 0xFF;
     }
 
     return ipmi::responseSuccess(countWritten);
@@ -825,3 +932,4 @@ void registerStorageFunctions()
 }
 } // namespace storage
 } // namespace ipmi
+

@@ -61,7 +61,7 @@ namespace ipmi
 {
 
 /** @brief impitool chassis power command. Only Reboot and ForceWarmReboot 
- *  are supported by BF.
+ *  are supported by BF2 in BF3 also Soft Off is supported.
  *
  *  @returns success or unspecified error.
  */
@@ -79,6 +79,11 @@ ipmi::RspType<> ipmiChassisPowerBF(ipmi::Context::ptr& ctx,
         case CMD_HARD_RESET:
             rc = initiateHostStateTransition(ctx, State::Host::Transition::ForceWarmReboot);
             break;
+#ifdef BF3_CHASSIS_COMMAND
+        case CMD_SOFT_OFF_VIA_OVER_TEMP:
+            rc = initiateHostStateTransition(ctx, State::Host::Transition::Off);
+            break;
+#endif
         default:
         {
 	        phosphor::logging::log<level::ERR>("Unsupported command");

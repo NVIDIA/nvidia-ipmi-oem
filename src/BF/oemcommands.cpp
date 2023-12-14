@@ -1,6 +1,5 @@
 /**
  * Copyright © 2020 NVIDIA Corporation
- *
  * License Information here...
  */
 
@@ -37,16 +36,113 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <unordered_map>
+
 const char* systemdServiceBf = "org.freedesktop.systemd1";
 const char* systemdUnitIntfBf = "org.freedesktop.systemd1.Unit";
 const char* rshimSystemdObjBf = "/org/freedesktop/systemd1/unit/rshim_2eservice";
+const char* dbusPropertyInterface = "org.freedesktop.DBus.Properties";
 
+const char* ctlBMCtorSwitchModeService = "xyz.openbmc_project.Settings";
+const char* ctlBMCtorSwitchModeBMCObj = "/xyz/openbmc_project/control/torswitchportsmode";
+const char* ctlBMCtorSwitchModeIntf = "xyz.openbmc_project.Control.TorSwitchPortsMode";
+const char* ctlBMCtorSwitchMode = "TorSwitchPortsMode";
+const char* torSwitchModeSystemdObj = "/org/freedesktop/systemd1/unit/torswitch_2dmode_2eservice";
 
+// PowerSubSystem
+const char* powerCapacityObj = "/xyz/openbmc_project/control/host0/PowerLimit_0";
+const char* powerCapacitySrvice = "com.Nvidia.Powermanager";
+const char* powerCapacityInterface = "xyz.openbmc_project.Control.Power.Cap";
+const char* powerCapacityModeInterface = "xyz.openbmc_project.Control.Power.Mode";
+const char* powerSubsysObj = "/xyz/openbmc_project/control/host0/powercapacity";
+const char* powerSubsysSrvice = "xyz.openbmc_project.Settings";
+const char* powerSubsysInterface = "xyz.openbmc_project.Control.PowerSubsystem.Capacity";
+
+// User Manager object in dbus
+static constexpr const char* userMgrObjBasePath = "/xyz/openbmc_project/user";
+static constexpr const char* userMgrInterface =
+    "xyz.openbmc_project.User.Manager";
+static constexpr const char* usersDeleteIface =
+    "xyz.openbmc_project.Object.Delete";
+
+// BIOSConfig Manager object in dbus
+static constexpr const char* biosConfigMgrPath =
+    "/xyz/openbmc_project/bios_config/manager";
+static constexpr const char* biosConfigMgrIface =
+    "xyz.openbmc_project.BIOSConfig.Manager";
+static constexpr const char* createUserMethod = "CreateUser";
+
+static const std::vector<std::string> nicExternalHostPrivileges = {
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FLASH_ACCESS",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FW_UPDATE",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NIC_RESET",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_GLOBAL",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_HOST",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_INTERNAL_CPU",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_NV_PORT",
+            "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_PCC_UPDATE"
+            };
+
+const char* connectxSevice = "xyz.openbmc_project.Settings.connectx";
+const char* connectxSmartnicModeObj = "/xyz/openbmc_project/network/connectx/smartnic_mode/smartnic_mode/INTERNAL_CPU_OFFLOAD_ENGINE";
+const char* connectxHostAccessObj = "/xyz/openbmc_project/network/connectx/host_access/HOST_PRIV_RSHIM";
+const char* connectxSmartnicOsState = "/xyz/openbmc_project/network/connectx/smartnic_os_state/os_state";
+
+struct PropertyInfo
+{
+    const char* intf;
+    const char* prop;
+    const std::unordered_map<std::string,int> strToInt;
+    const std::unordered_map<int,std::string> intToStr;
+};
+
+const PropertyInfo nicAttributeInfo = {
+    .intf = "xyz.openbmc_project.Control.NicAttribute",
+    .prop = "NicAttribute",
+    .strToInt = {{"xyz.openbmc_project.Control.NicAttribute.Modes.Enabled", 1},
+                {"xyz.openbmc_project.Control.NicAttribute.Modes.Disabled", 0},
+                {"xyz.openbmc_project.Control.NicAttribute.Modes.Invaild", -1}},
+    .intToStr = {{1, "xyz.openbmc_project.Control.NicAttribute.Modes.Enabled"},
+                {0, "xyz.openbmc_project.Control.NicAttribute.Modes.Disabled"}}
+};
+
+const PropertyInfo nicTristateAttributeInfo = {
+    .intf = "xyz.openbmc_project.Control.NicTristateAttribute",
+    .prop = "NicTristateAttribute",
+    .strToInt = {{"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Default", 0},
+                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Enabled", 1},
+                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Disabled", 2},
+                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Invaild", -1}},
+    .intToStr = {{0, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Default"},
+                 {1, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Enabled"},
+                 {2, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Disabled"}}
+};
+
+const PropertyInfo smartNicOsStateInfo = {
+    .intf = "xyz.openbmc_project.Control.SmartNicOsState",
+    .prop = "SmartNicOsState",
+    .strToInt = {{"xyz.openbmc_project.Control.SmartNicOsState.Modes.BootRom", 0},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.BL2", 1},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.BL31", 2},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.UEFI", 3},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsStarting", 4},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsIsRunning", 5},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.LowPowerStandby", 6},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FirmwareUpdateInProgress", 7},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsCrashDumpInProgress", 8},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsCrashDumpIsComplete", 9},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FWFaultCrashDumpInProgress", 10},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FWFaultCrashDumpIsComplete", 11},
+                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.Invalid", -1}},
+    .intToStr = {}
+};
 
 void registerNvOemPlatformFunctions() __attribute__((constructor(102)));
 
 
 using namespace phosphor::logging;
+
+constexpr uint8_t localChannel = 0x08;
 
 using GetSubTreeType = std::vector<
     std::pair<std::string,
@@ -56,8 +152,34 @@ using BasicVariantType = std::variant<std::string>;
 using PropertyMapType =
     boost::container::flat_map<std::string, BasicVariantType>;
 
+struct userInfo {
+    std::string name;
+    std::string password;
+};
+
+struct userInfoBuf {
+    std::vector<uint8_t> respUserNameBuf;
+    std::vector<uint8_t> respPasswordBuf;
+};
+
 namespace ipmi
 {
+    constexpr int BOOTSTRAP_ACCOUNTS_NUM = 2;
+    const int BOOTSTRAP_PASSWORD_SIZE = 16;
+    static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
+    std::array<userInfo, BOOTSTRAP_ACCOUNTS_NUM> userDatabase = {{
+        { "NvBluefieldUefi0", ""},
+        { "NvBluefieldUefi1", ""}
+    }};
+
+    std::array<userInfoBuf, 2> userDatabaseBuff = {
+        {{{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd', 'U', 'e', 'f', 'i', '0'}, {}},
+         {{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd', 'U', 'e', 'f', 'i', '1'}, {}}}
+    };
+
+    static int BootStrapCurrentUserIndex = 0;
+    static std::string accountService;
+
     template <typename... ArgTypes>
     static int executeCmd(const char* path, ArgTypes&&... tArgs)
     {
@@ -65,8 +187,7 @@ namespace ipmi
         execProg.wait();
         return execProg.exit_code();
     }
-        
-    
+
     ipmi::RspType<> ipmiSetRshimStateBf(uint8_t newState)
     {
         /*
@@ -404,8 +525,47 @@ namespace ipmi
 
     }
 
+    ipmi::RspType<> ipmiNetworkReprovisioning(ipmi::Context::ptr ctx, uint8_t golden_image_timeout, uint8_t timeout_from_network, uint8_t verbosityLevel) {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }                
+        if (golden_image_timeout == 0){
+            golden_image_timeout=15;
+        }
+        if (timeout_from_network == 0){
+            timeout_from_network=60;
+        }
+        if (verbosityLevel > 2){
+            log<level::ERR>("Verbosity level can be a value between 0 to 2");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        try
+        {
+            
+            auto method = dbus->new_method_call("xyz.openbmc_project.Software.BMC.GoldenImageUpdateService",
+                                                "/xyz/openbmc_project/host0/software/goldenimageupdater",
+                                                "xyz.openbmc_project.Common.GoldenImageUpdater", 
+                                                "StartGoldenImageReprovisioning");
+            method.append(golden_image_timeout, timeout_from_network, verbosityLevel);
+
+            dbus->call_noreply(method); 
+            return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmiNetworkReprovisioning error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+        
+    }
+
+    ipmi::RspType<uint8_t> ipmicmdTorSwitchSetMode(ipmi::Context::ptr ctx, uint8_t parameter);
+    
     ipmi::RspType<uint8_t>
-    ipmiBFResetControl(uint8_t resetOption)
+    ipmiBFResetControl(ipmi::Context::ptr ctx, uint8_t resetOption)
     {
         int response;
         switch(resetOption)
@@ -415,6 +575,8 @@ namespace ipmi
                 break;
             case 0x03: // tor eswitch reset
                 response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "do_tor_eswitch_reset");
+                if(!response) // switch returns to a default mode after a reset- need to change the mode of TorSwitchPortsMode to that mode (0x00)
+                    ipmicmdTorSwitchSetMode(ctx, ipmi::nvidia::enumTorSwitchAllowAll);
                 break;
             case 0x04: // arm hard reset - nsrst - secondary DPU
                 response = executeCmd("/usr/sbin/mlnx_bf_reset_control", "bf2_nic_bmc_ctrl1");
@@ -533,7 +695,6 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-
     ipmi::RspType<uint8_t> ipmiOemGetSSDLedBF(uint8_t type, uint8_t instance)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetSSDLed command is unsupported in Bluefield 2/3");
@@ -559,17 +720,11 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-
-
     ipmi::RspType<uint16_t, uint16_t, uint8_t> ipmiOemPsuPowerBF(uint8_t type, uint8_t id) 
     {
         phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemPsuPower command is unsupported in Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
-
-
-
-
 
     ipmi::RspType<> ipmiBiosSetVersionBF(uint8_t major, uint8_t minor) 
     {
@@ -620,8 +775,6 @@ namespace ipmi
         phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetUsbSerialNum command is unsupported in Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
-
-    
 
     ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHiBF()
     {
@@ -682,7 +835,1026 @@ namespace ipmi
         }
     }
 
-} // namespace ipmi
+    ipmi::RspType<uint8_t> ipmicmdTorSwitchGetMode(ipmi::Context::ptr ctx)
+    {
+        try
+        {
+            auto method = ctx->bus->new_method_call(ctlBMCtorSwitchModeService,
+                                                    ctlBMCtorSwitchModeBMCObj,
+                                                    dbusPropertyInterface,
+                                                    "Get");
+            method.append(ctlBMCtorSwitchModeIntf, ctlBMCtorSwitchMode);
+            auto reply = ctx->bus->call(method);
+            if (reply.is_method_error())
+            {
+                log<level::ERR>("ipmicmdTorSwitchGetMode: Get Dbus error",
+                                entry("SERVICE=%s", ctlBMCtorSwitchModeService));
+                return ipmi::responseResponseError();
+            }
+
+            std::variant<std::string> variantValue;
+            reply.read(variantValue);
+
+            auto strValue = std::get<std::string>(variantValue);
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.All")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchAllowAll);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.BMC")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchAllowBMC);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.DPU")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchAllowDPU);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.None")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchDenyNone);
+            }
+            if (strValue ==
+                "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.Disabled")
+            {
+                return ipmi::responseSuccess(ipmi::nvidia::enumTorSwitchDisabled);
+            }
+
+            log<level::ERR>("ipmicmdTorSwitchGetMode: Invalid Mode");
+            return ipmi::responseResponseError();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdTorSwitchGetMode error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
+    }
+
+    ipmi::RspType<uint8_t> ipmicmdTorSwitchSetMode(ipmi::Context::ptr ctx,
+                                                   uint8_t parameter)
+    {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+        std::string strValue;
+        switch(parameter)
+        {
+            case ipmi::nvidia::enumTorSwitchAllowAll:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.All";
+                break;
+            case ipmi::nvidia::enumTorSwitchAllowBMC:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.BMC";
+                break;
+            case ipmi::nvidia::enumTorSwitchAllowDPU:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.DPU";
+                break;
+            case ipmi::nvidia::enumTorSwitchDenyNone:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.None";
+                break;
+            case ipmi::nvidia::enumTorSwitchDisabled:
+                strValue = "xyz.openbmc_project.Control.TorSwitchPortsMode.Modes.Disabled";
+                break;
+            default:
+                log<level::ERR>("ipmicmdTorSwitchGetMode: Invalid Mode");
+                return ipmi::responseInvalidFieldRequest();
+        }
+
+        // Set Tor Switch Mode
+        try
+        {
+            std::variant<std::string> variantValue(strValue);
+
+            auto method = ctx->bus->new_method_call(ctlBMCtorSwitchModeService,
+                                                    ctlBMCtorSwitchModeBMCObj,
+                                                    dbusPropertyInterface,
+                                                    "Set");
+            method.append(ctlBMCtorSwitchModeIntf, ctlBMCtorSwitchMode, variantValue);
+            auto reply = ctx->bus->call(method);
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdTorSwitchSetMode error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::responseUnspecifiedError();
+        }
+
+        // Restart TOR Switch Control Service
+        try
+        {
+            auto method = ctx->bus->new_method_call(systemdServiceBf,
+                                                    torSwitchModeSystemdObj,
+                                                    systemdUnitIntfBf,
+                                                    "Restart");
+            method.append("replace");
+            ctx->bus->call_noreply(method);
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("Failed to restart TorSwitch Control service",
+                phosphor::logging::entry("EXCEPTION=%s", e.what()));
+            return ipmi::responseUnspecifiedError();
+        }
+
+        return ipmi::responseSuccess(parameter);
+    }
+
+/**
+ * Retrieves the current status of the CredentialBootstrap property.
+ *
+ * @return The status of the CredentialBootstrap property:
+ *         - True if credential bootstrapping is enabled.
+ *         - False if credential bootstrapping is disabled or an error occurred.
+ */
+static bool getCredentialBootStrap()
+{
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    try
+    {
+        auto biosService =
+            ipmi::getService(*dbus, biosConfigMgrIface, biosConfigMgrPath);
+        auto credentialBootStrap =
+            ipmi::getDbusProperty(*dbus, biosService, biosConfigMgrPath,
+                                  biosConfigMgrIface, "CredentialBootstrap");
+
+        return std::get<bool>(credentialBootStrap);
+    }
+    catch (std::exception& e)
+    {
+        log<level::ERR>("Failed to get CredentialBootstrap status",
+                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return false;
+    }
+}
+
+/**
+ * Sets the CredentialBootstrap property based on the given disableCredBootStrap value.
+ * If disableCredBootStrap is 0xa5, the CredentialBootstrap property is set to true
+ * to disable credential bootstrapping. Otherwise, it is set to false to enable it.
+ *
+ * @param disableCredBootStrap The value indicating whether to disable credential bootstrapping.
+ */
+static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
+{
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    auto biosService =
+        ipmi::getService(*dbus, biosConfigMgrIface, biosConfigMgrPath);
+    // if disable crendential BootStrap status is 0xa5,
+    // then Keep credential bootstrapping enabled
+    if (disableCredBootStrap == 0xa5)
+    {
+        ipmi::setDbusProperty(*dbus, biosService, biosConfigMgrPath,
+                              biosConfigMgrIface, "CredentialBootstrap",
+                              bool(true));
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "property set to true");
+    }
+    else
+    {
+        ipmi::setDbusProperty(*dbus, biosService, biosConfigMgrPath,
+                              biosConfigMgrIface, "CredentialBootstrap",
+                              bool(false));
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "property set to false");
+    }
+}
+
+static int pamFunctionConversation(int numMsg, const struct pam_message** msg,
+                                   struct pam_response** resp, void* appdataPtr)
+{
+    if (appdataPtr == nullptr)
+    {
+        return PAM_CONV_ERR;
+    }
+    if (numMsg <= 0 || numMsg >= PAM_MAX_NUM_MSG)
+    {
+        return PAM_CONV_ERR;
+    }
+
+    for (int i = 0; i < numMsg; ++i)
+    {
+        /* Ignore all PAM messages except prompting for hidden input */
+        if (msg[i]->msg_style != PAM_PROMPT_ECHO_OFF)
+        {
+            continue;
+        }
+
+        /* Assume PAM is only prompting for the password as hidden input */
+        /* Allocate memory only when PAM_PROMPT_ECHO_OFF is encounterred */
+        char* appPass = reinterpret_cast<char*>(appdataPtr);
+        size_t appPassSize = std::strlen(appPass);
+        if (appPassSize >= PAM_MAX_RESP_SIZE)
+        {
+            return PAM_CONV_ERR;
+        }
+
+        char* pass = reinterpret_cast<char*>(malloc(appPassSize + 1));
+        if (pass == nullptr)
+        {
+            return PAM_BUF_ERR;
+        }
+
+        void* ptr =
+            calloc(static_cast<size_t>(numMsg), sizeof(struct pam_response));
+        if (ptr == nullptr)
+        {
+            free(pass);
+            return PAM_BUF_ERR;
+        }
+
+        std::strncpy(pass, appPass, appPassSize + 1);
+        *resp = reinterpret_cast<pam_response*>(ptr);
+        resp[i]->resp = pass;
+        return PAM_SUCCESS;
+    }
+    return PAM_CONV_ERR;
+}
+
+
+/**
+ * Checks if a password is valid based on specific criteria.
+ *
+ * @param password The password to be checked.
+ * @return True if the password is considered valid, false otherwise.
+ */
+
+static bool isValidPassword(const std::string& password)
+{
+    int i = 0;
+    const char* ptr = password.c_str();
+
+    while (ptr[0] && ptr[1]) {
+        if ((ptr[1] == (ptr[0] + 1)) || (ptr[1] == (ptr[0] - 1))) {
+            i++;
+        }
+        ptr++;
+    }
+
+    int maxrepeat = 3 + (0.09 * password.length());
+    if (i > maxrepeat) {
+        phosphor::logging::log<level::DEBUG>(
+            "isValidPassword: Password is too simplistic/systematic");
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Generates a random password with specific criteria.
+ *
+ * @param uniqueStr[out] The generated random password.
+ * @return True if the random password is generated successfully, false otherwise.
+ */
+static bool getRandomPasswordInternal(std::string& uniqueStr)
+{
+    std::ifstream randFp("/dev/urandom", std::ifstream::in);
+    char byte;
+    uint8_t maxStrSize = BOOTSTRAP_PASSWORD_SIZE;
+    std::string invalidChar = "\'\\\"";
+
+    if (!randFp.is_open())
+    {
+        phosphor::logging::log<level::ERR>(
+            "ipmiGetBootStrapAccount: Failed to open urandom file");
+        return false;
+    }
+
+    for (uint8_t it = 0; it < maxStrSize; it++)
+    {
+        while (1)
+        {
+            if (randFp.get(byte))
+            {
+                if (iswprint(byte))
+                {
+                    if (!iswspace(byte) &&
+                        invalidChar.find(byte) == std::string::npos)
+                    {
+                        if (it == 0)
+                        {
+                            /* At least one lower case */
+                            if (iswlower(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else if (it == 1)
+                        {
+                            /* At least one upper case */
+                            if (iswupper(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else if (it == 2)
+                        {
+                            /* At least one digit */
+                            if (iswdigit(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else if (it == 3)
+                        {
+                            /* At least one special char*/
+                            if (!iswdigit(byte) && !iswalpha(byte))
+                            {
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        uniqueStr.push_back(byte);
+    }
+    randFp.close();
+    std::random_shuffle(uniqueStr.begin(), uniqueStr.end());
+    return true;
+}
+
+static int pamUpdatePasswd(const char* username, const char* password)
+{
+    const struct pam_conv localConversation = {pamFunctionConversation,
+                                               const_cast<char*>(password)};
+    pam_handle_t* localAuthHandle = NULL; // this gets set by pam_start
+    int retval =
+        pam_start("passwd", username, &localConversation, &localAuthHandle);
+    if (retval != PAM_SUCCESS)
+    {
+        phosphor::logging::log<level::ERR>("pamUpdatePasswd failed");
+        return retval;
+    }
+
+    retval = pam_chauthtok(localAuthHandle, PAM_SILENT);
+    if (retval != PAM_SUCCESS)
+    {
+        pam_end(localAuthHandle, retval);
+        phosphor::logging::log<level::ERR>("pamUpdatePasswd failed");
+        return retval;
+    }
+    return pam_end(localAuthHandle, PAM_SUCCESS);
+}
+
+
+/**
+ * Generates a random password with specific criteria.
+ *
+ * @param uniqueStr[out] The generated random password.
+ * @return True if the random password is generated successfully, false otherwise.
+ */
+static bool getRandomPassword(std::string& uniqueStr)
+{
+    bool passwordIsValid = false;
+    int max_retries = 10;
+    bool ret;
+
+    while (!passwordIsValid && (max_retries != 0)) {
+        ret = getRandomPasswordInternal(uniqueStr);
+        if (!ret)
+        {
+            phosphor::logging::log<level::ERR>(
+                "getRandomPassword: Failed to generate alphanumeric "
+                "Password");
+            return false;
+        }
+        passwordIsValid = isValidPassword(uniqueStr);
+        max_retries--;
+    }
+
+    if (!passwordIsValid) {
+        phosphor::logging::log<level::ERR>(
+            "getRandomPassword: Retries Exceeded,  Failed to generate valid Password");
+        return false;
+    }
+    return true;
+}
+
+// Get the bootstrap username at the specified index
+static std::string getBootstrapUserName(int index)
+{
+    if (index < userDatabase.size())
+    {
+        return ipmi::userDatabase[index].name;
+    }
+    return "";
+}
+
+// Get the bootstrap password at the specified index
+static std::string getBootstrapPassword(int index)
+{
+    if (index < userDatabase.size())
+    {
+        return ipmi::userDatabase[index].password;
+    }
+    return "";
+}
+
+// Set the bootstrap password at the specified index
+static void SetBootstrapPassword(int index, std::string password)
+{
+    if (index < userDatabase.size())
+    {
+        ipmi::userDatabase[index].password = password;
+    }
+}
+
+static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
+                                                    uint8_t disableCredBootStrap,
+                                                    uint8_t index)
+{
+    int accountIndex = static_cast<int>(index);
+    try
+    {
+        if (accountIndex > BOOTSTRAP_ACCOUNTS_NUM)
+        {
+            phosphor::logging::log<level::ERR>("ipmiCreateBootStrapAccountBF: Invalid index");
+            return ipmi::responseResponseError();
+        }
+
+        // Check the CredentialBootstrapping property status,
+        // if disabled, then reject the command with success code.
+        bool isCredentialBooStrapSet = getCredentialBootStrap();
+        if (!isCredentialBooStrapSet)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateBootStrapAccountBF: Credential BootStrapping Disabled "
+                "Get BootStrap Account command rejected.");
+
+            return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
+        }
+
+        //Get username from DB
+        std::string userName = ipmi::getBootstrapUserName(accountIndex);
+        std::string password;
+        if (!getRandomPassword(password)) {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateBootStrapAccountBF: Failed to generate valid Password");
+            return ipmi::responseResponseError();
+        }
+        //save password at the DB
+        ipmi::SetBootstrapPassword(accountIndex, password);
+
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        ipmi::accountService = getService(*dbus, userMgrInterface, userMgrObjBasePath);
+
+        // create the new user with only redfish-hostiface group access
+        auto method = dbus->new_method_call(ipmi::accountService.c_str(), userMgrObjBasePath,
+                                            userMgrInterface, createUserMethod);
+        method.append(userName, std::vector<std::string>{"redfish-hostiface"},
+                    "priv-admin", true);
+        auto reply = dbus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error returns from call to dbus. BootStrap Failed");
+            return ipmi::responseResponseError();
+        }
+
+        // update the password
+        boost::system::error_code ec;
+        int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
+        if (retval != PAM_SUCCESS)
+        {
+            dbus->yield_method_call<void>(ctx->yield, ec, ipmi::accountService.c_str(),
+                                          userMgrObjBasePath + userName,
+                                          usersDeleteIface, "Delete");
+
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiCreateBootStrapAccountBF : Failed to update password.");
+            return ipmi::responseUnspecifiedError();
+        }
+        else
+        {
+            // update the "CredentialBootstrap" Dbus property w.r.to
+            // disable crendential BootStrap status
+            setCredentialBootStrap(disableCredBootStrap);
+            ipmi::userDatabaseBuff[accountIndex].respPasswordBuf.clear();
+            std::copy(password.begin(), password.end(),
+                      std::back_inserter(ipmi::userDatabaseBuff[accountIndex].respPasswordBuf));
+            return ipmi::responseSuccess();
+        }
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiCreateBootStrapAccountBF : Failed to generate BootStrap Account "
+            "Credentials");
+        return ipmi::responseResponseError();
+    }
+}
+
+static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
+    ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx, uint8_t disableCredBootStrap)
+    {
+        //Remove the following account, and the bootstrap manager will recreate it.
+        size_t passwordSize = ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf.size();
+
+        if (passwordSize != BOOTSTRAP_PASSWORD_SIZE) {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                                "ipmiGetBootStrapAccountBF : Invalid password size.",
+                                phosphor::logging::entry("SIZE= %zu", passwordSize));
+                return ipmi::responseResponseError();
+        }
+        auto ret = ipmi::responseSuccess(ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
+                                         ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf);
+        // Switch current account
+        ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1 : 0;
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+
+        dbus->async_method_call(
+            [](boost::system::error_code ec2, sdbusplus::message_t& m) {
+                if (ec2 || m.is_method_error())
+                {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                        "Error returns from call to dbus. delete user failed");
+                    return;
+                }
+            },
+            ipmi::accountService.c_str(),
+            std::string(userMgrObjBasePath)
+                .append("/")
+                .append(ipmi::getBootstrapUserName(ipmi::BootStrapCurrentUserIndex)),
+            usersDeleteIface, "Delete");
+        return ret;
+    }
+
+    // read property return value as int, using propertyInfo to map string
+    // property to int, regarding negative as error
+    static int readPropToInt(ipmi::Context::ptr ctx, const char* service,
+                             const char* obj, const PropertyInfo& propertyInfo)
+    {
+        auto method = ctx->bus->new_method_call(service, obj,
+                                                dbusPropertyInterface, "Get");
+
+        method.append(propertyInfo.intf, propertyInfo.prop);
+
+        auto reply = ctx->bus->call(method);
+
+        if (reply.is_method_error())
+        {
+        return -1;
+        }
+        std::variant<std::string> variantValue;
+        reply.read(variantValue);
+
+        auto strValue = std::get<std::string>(variantValue);
+        auto ret = propertyInfo.strToInt.find(strValue);
+        return ret != propertyInfo.strToInt.end() ? ret->second : -1;
+    }
+
+    // read property return value as int, using propertyInfo to map int to
+    // string property
+    static int writeIntToProp(ipmi::Context::ptr ctx, const char* service,
+                              const char* obj, const PropertyInfo& propertyInfo,
+                              int input)
+    {
+        auto it = propertyInfo.intToStr.find(input);
+        if (it == propertyInfo.intToStr.end())
+        {
+        return -1;
+        }
+
+        std::variant<std::string> variantValue(it->second);
+        auto method = ctx->bus->new_method_call(service, obj,
+                                                dbusPropertyInterface, "Set");
+
+        method.append(propertyInfo.intf, propertyInfo.prop, variantValue);
+
+        auto reply = ctx->bus->call(method);
+        return 0;
+    }
+
+    ipmi::RspType<uint8_t> simplePropertyGet(ipmi::Context::ptr ctx,
+                                             const char* service,
+                                             const char* obj,
+                                             const PropertyInfo& propertyInfo)
+    {
+        try
+        {
+        auto val = readPropToInt(ctx, service, obj, propertyInfo);
+        if (val < 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                (std::string(obj) + " get invalid value").c_str());
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess(val);
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(obj) + " get failed").c_str());
+        return ipmi::responseResponseError();
+        }
+    }
+
+    ipmi::RspType<> simplePropertySet(ipmi::Context::ptr ctx,
+                                      const char* service, const char* obj,
+                                      const PropertyInfo& propertyInfo,
+                                      int input)
+    {
+        try
+        {
+        auto val = writeIntToProp(ctx, service, obj, propertyInfo, input);
+        if (val < 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                (std::string(obj) + "set invalid value").c_str());
+            return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(obj) + "set failed").c_str());
+        return ipmi::responseResponseError();
+        }
+    }
+
+    auto ipmicmdNicGetSmartnicMode = [](ipmi::Context::ptr ctx) {
+        return simplePropertyGet(ctx, connectxSevice, connectxSmartnicModeObj,
+                                 nicAttributeInfo);
+    };
+    auto ipmicmdNicGetHostAccess = [](ipmi::Context::ptr ctx) {
+        return simplePropertyGet(ctx, connectxSevice, connectxHostAccessObj,
+                                 nicAttributeInfo);
+    };
+    auto ipmicmdNicSetSmartnicMode = [](ipmi::Context::ptr ctx, uint8_t val) {
+        return simplePropertySet(ctx, connectxSevice, connectxSmartnicModeObj,
+                                 nicAttributeInfo, val);
+    };
+    auto ipmicmdNicSetHostAccess = [](ipmi::Context::ptr ctx, uint8_t val) {
+        return simplePropertySet(ctx, connectxSevice, connectxHostAccessObj,
+                                 nicAttributeInfo, val);
+    };
+    auto ipmicmdNicGetOsState = [](ipmi::Context::ptr ctx) {
+        return simplePropertyGet(ctx, connectxSevice, connectxSmartnicOsState,
+                                 smartNicOsStateInfo);
+    };
+    auto ipmicmdNicSetExternalHostPrivilege = [](ipmi::Context::ptr ctx,
+                                                 uint8_t idx, uint8_t val) {
+        return idx < nicExternalHostPrivileges.size()
+                   ? simplePropertySet(ctx, connectxSevice,
+                                       nicExternalHostPrivileges[idx].c_str(),
+                                       nicTristateAttributeInfo, val)
+                   : ipmi::responseInvalidFieldRequest();
+    };
+
+    ipmi::RspType<std::vector<uint8_t>>
+        ipmicmdNicGetExternalHostPrivileges(ipmi::Context::ptr ctx)
+    {
+        std::vector<uint8_t> res(nicExternalHostPrivileges.size(), 0);
+        try
+        {
+        for (int i = 0; i < nicExternalHostPrivileges.size(); ++i)
+        {
+            auto val = readPropToInt(ctx, connectxSevice,
+                                     nicExternalHostPrivileges[i].c_str(),
+                                     nicTristateAttributeInfo);
+            if (val < 0)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    (std::string(__func__) + " invalid value").c_str());
+                return ipmi::responseResponseError();
+            }
+            res[i] = val;
+        }
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(__func__) + " Failed").c_str());
+        return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess(res);
+    }
+
+    ipmi::RspType<uint8_t, std::vector<uint8_t>, std::vector<uint8_t>>
+        ipmicmdNicGetStrap(ipmi::Context::ptr ctx)
+    {
+
+        static const std::vector<std::string> strapFields = {
+            "DISABLE_INBAND_RECOVER",
+            "PRIMARY_IS_PCORE_1",
+            "2PCORE_ACTIVE",
+            "SOCKET_DIRECT",
+            "PCI_REVERSAL",
+            "PCI_PARTITION_1",
+            "PCI_PARTITION_0",
+            "OSC_FREQ_1",
+            "OSC_FREQ_0",
+            "CORE_BYPASS_N",
+            "FNP"};
+
+        const std::string connectxStrapMask =
+            "/xyz/openbmc_project/network/connectx/strap_options/mask/";
+        const std::string connectxStrapVal =
+            "/xyz/openbmc_project/network/connectx/strap_options/"
+            "strap_options/";
+        std::vector<uint8_t> resVal(strapFields.size(), 0);
+        std::vector<uint8_t> resMask(strapFields.size(), 0);
+        try
+        {
+        for (int i = 0; i < strapFields.size(); ++i)
+        {
+            auto val = readPropToInt(
+                ctx, connectxSevice,
+                (connectxStrapVal + strapFields[i]).c_str(), nicAttributeInfo);
+            auto mask = readPropToInt(
+                ctx, connectxSevice,
+                (connectxStrapMask + strapFields[i]).c_str(), nicAttributeInfo);
+            if (val < 0 || mask < 0)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    (std::string(__func__) + " invalid value").c_str());
+                return ipmi::responseResponseError();
+            }
+            resVal[i] = val;
+            resMask[i] = mask;
+        }
+        }
+        catch (const std::exception& e)
+        {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            (std::string(__func__) + " Failed").c_str());
+        return ipmi::responseResponseError();
+        }
+        return ipmi::responseSuccess(0, resVal, resMask);
+    }
+    ipmi::RspType<uint8_t> ipmicmdPowerCapEnabledGet(ipmi::Context::ptr ctx)
+    {
+        try
+        {
+            auto method = ctx->bus->new_method_call(powerCapacitySrvice,
+                                                    powerCapacityObj,
+                                                    dbusPropertyInterface,
+                                                    "Get");
+            method.append(powerCapacityModeInterface, "PowerMode");
+            auto reply = ctx->bus->call(method);
+            if (reply.is_method_error())
+            {
+                log<level::ERR>("ipmicmdPowerCapEnabledGet: Get Dbus error");
+                return ipmi::responseResponseError();
+            }
+
+            std::variant<std::string> variantValue;
+            reply.read(variantValue);
+
+            auto strValue = std::get<std::string>(variantValue);
+            if (strValue ==
+                "xyz.openbmc_project.Control.Power.Mode.PowerMode.Static")
+            {
+                return ipmi::responseSuccess(0x00);
+            }
+            return ipmi::responseSuccess(0x01);
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdPowerCapEnabledGet error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+    }
+
+    ipmi::RspType<uint8_t> ipmicmdPowerCapEnabledSet(ipmi::Context::ptr ctx, uint8_t parameter)
+    {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+        std::string strValue;
+        if (parameter == 1)
+        {
+            strValue = "xyz.openbmc_project.Control.Power.Mode.PowerMode.PowerSaving";
+        }
+        else
+        {
+            strValue = "xyz.openbmc_project.Control.Power.Mode.PowerMode.Static";
+        }
+
+        try
+        {
+            std::variant<std::string> variantValue(strValue);
+            auto method = ctx->bus->new_method_call(powerCapacitySrvice,
+                                                    powerCapacityObj,
+                                                   dbusPropertyInterface,
+                                                  "Set");
+            method.append(powerCapacityModeInterface, "PowerMode", variantValue);
+            auto reply = ctx->bus->call(method);
+            if (reply.is_method_error())
+            {
+                log<level::ERR>("ipmicmdPowerCapEnabledSet: Get Dbus error");
+                return ipmi::responseResponseError();
+            }
+            return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdPowerCapEnabledSet error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+    }
+
+/**
+ * @brief Retrieve a generic power capacity property using D-Bus.
+ *
+ * This function communicates with the D-Bus system to retrieve a specific
+ * power capacity property identified by the provided 'property' parameter.
+ *
+ * @param ctx         A pointer to the IPMI context, which includes information
+ *                   about the D-Bus connection and other context-related data.
+ * @param property    The name of the property to retrieve.
+ *
+ * @return An instance of ipmi::RspType<uint32_t> representing the result of the
+ *         operation. If the property is successfully retrieved, it contains
+ *         the property value. If an error occurs during the process, an error
+ *         response is returned.
+ *
+ * @remarks This function constructs a D-Bus method call to request the specified
+ *          power capacity property and handles potential D-Bus errors. If the
+ *          property retrieval is successful, it returns the property value as
+ *          an unsigned 32-bit integer wrapped in an ipmi::RspType. In case of
+ *          any exceptions or D-Bus errors, it logs the error and returns an
+ *          error response.
+ */
+
+static ipmi::RspType<uint32_t> ipmicmdPowerCapGenericGet(
+                                            ipmi::Context::ptr ctx,
+                                            const char* property,
+                                            const char* object,
+                                            const char* service,
+                                            const char* interface)
+    {
+        try
+        {
+            auto method = ctx->bus->new_method_call(service,
+                                                    object,
+                                                    dbusPropertyInterface,
+                                                    "Get");
+            method.append(interface,
+                          property);
+            auto reply = ctx->bus->call(method);
+            if (reply.is_method_error())
+            {
+                log<level::ERR>("ipmicmdPowerCapGenericGet: Get Dbus error");
+                return ipmi::responseResponseError();
+            }
+            std::variant<uint32_t> variantValue;
+            reply.read(variantValue);
+            auto retValue = std::get<uint32_t>(variantValue);
+            return ipmi::responseSuccess(retValue);
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdPowerCapGenericGet error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+    }
+
+static ipmi::RspType<> ipmicmdPowerCapGenericSet(
+                                                ipmi::Context::ptr ctx,
+                                                const char* property,
+                                                uint8_t parameter,
+                                                const char* object,
+                                                const char* service,
+                                                const char* interface)
+    {
+        try
+        {
+            auto method = ctx->bus->new_method_call(service,
+                                                    object,
+                                                    dbusPropertyInterface,
+                                                    "Set");
+            std::variant<uint32_t> variantValue = parameter;
+
+            method.append(interface,
+                          property, variantValue);
+            auto reply = ctx->bus->call(method);
+            if (reply.is_method_error())
+            {
+                log<level::ERR>("ipmicmdPowerCapGenericSet: Get Dbus error");
+                return ipmi::responseResponseError();
+            }
+            return ipmi::responseSuccess();
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>("ipmicmdPowerCapGenericSet error",
+                            entry("ERROR=%s", e.what()));
+            return ipmi::response(ipmi::ccResponseError);
+        }
+    }
+
+    ipmi::RspType<> ipmicmdPowerCapMaxSet(ipmi::Context::ptr ctx,
+                                        uint8_t parameter)
+    {
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "MaxPowerCapValue",
+                                        parameter,
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+    ipmi::RspType<uint32_t> ipmicmdPowerCapMaxGet(ipmi::Context::ptr ctx)
+    {
+        return ipmicmdPowerCapGenericGet(ctx,
+                                        "MaxPowerCapValue",
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+
+
+    ipmi::RspType<> ipmicmdPowerCapMinSet(ipmi::Context::ptr ctx,
+                                                                uint8_t parameter)
+    {
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "MinPowerCapValue",
+                                        parameter,
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+
+     ipmi::RspType<uint32_t> ipmicmdPowerCapMinGet(ipmi::Context::ptr ctx)
+    {
+        return ipmicmdPowerCapGenericGet(ctx,
+                                        "MinPowerCapValue",
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+
+    ipmi::RspType<> ipmicmdPowerCapAllocatedWattsSet(ipmi::Context::ptr ctx,
+                                                               uint8_t parameter)
+    {
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "AllocatedWatts",
+                                        parameter,
+                                        powerSubsysObj,
+                                        powerSubsysSrvice,
+                                        powerSubsysInterface);
+    }
+
+    ipmi::RspType<uint32_t> ipmicmdPowerCapAllocatedWattsGet(ipmi::Context::ptr ctx)
+    {
+        return ipmicmdPowerCapGenericGet(ctx,
+                                        "AllocatedWatts",
+                                        powerSubsysObj,
+                                        powerSubsysSrvice,
+                                        powerSubsysInterface);
+    }
+
+    static ipmi::RspType<> ipmicmdPowerPowerCapSet(ipmi::Context::ptr ctx,
+                                                   uint8_t parameter)
+    {
+        if (parameter > 100)
+        {
+            log<level::ERR>("ipmicmdPowerPowerCapSet: Invalid input,"
+                            "valid range [0,100]");
+            return ipmi::responseResponseError();
+        }
+        return ipmicmdPowerCapGenericSet(ctx,
+                                        "PowerCapPercentage",
+                                        parameter,
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+    }
+
+    static ipmi::RspType<uint8_t> ipmicmdPowerPowerCapGet(ipmi::Context::ptr ctx)
+    {
+        ipmi::RspType<uint32_t> capWattRet =
+                                        ipmicmdPowerCapGenericGet(ctx,
+                                        "PowerCapPercentage",
+                                        powerCapacityObj,
+                                        powerCapacitySrvice,
+                                        powerCapacityInterface);
+
+        if (std::get<0>(capWattRet) == ipmi::ccSuccess)
+        {
+            uint32_t value = std::get<0>(std::get<1>(capWattRet).value());
+            return ipmi::responseSuccess(static_cast<uint8_t>(value));
+        }
+        return ipmi::responseResponseError();
+    }
+
+ } // namespace ipmi
+
 
 void registerNvOemPlatformFunctions()
 {
@@ -905,5 +2077,117 @@ void registerNvOemPlatformFunctions()
                           ipmi::Privilege::Admin,
                           ipmi::ipmiOemNotifyDpuBoot);
     
+    // < Tor Switch Mode Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdTorSwitchGetMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdTorSwitchGetMode);
+
+    // < Tor Switch Mode Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdTorSwitchSetMode,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdTorSwitchSetMode);
+
+    // < Start DPU Network-Based Reprovisioning >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNetworkReprovisioning,
+                          ipmi::Privilege::sysIface, ipmi::ipmiNetworkReprovisioning);
+
+    // <Get Bootstrap Account Credentials>
+    log<level::NOTICE>(
+        "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetBootStrapAccount));
+
+    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
+                               ipmi::nvidia::misc::cmdGetBootStrapAccount,
+                               ipmi::Privilege::sysIface,
+                               ipmi::ipmiGetBootStrapAccountBF);
+    // <Initialized Bootstrap Account Credentials>
+    log<level::NOTICE>(
+        "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdCreateBootStrapAccount));
+
+    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
+                               ipmi::nvidia::misc::cmdCreateBootStrapAccount,
+                               ipmi::Privilege::Admin,
+                               ipmi::ipmiCreateBootStrapAccountBF);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetStrap,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetStrap);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetHostAccess,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetHostAccess);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetSmartnicMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetSmartnicMode);
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetHostAccess,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicSetHostAccess);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetSmartnicMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicSetSmartnicMode);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetOsState,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetOsState);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicGetExternalHostPrivileges,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicGetExternalHostPrivileges);
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdNicSetExternalHostPrivilege,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdNicSetExternalHostPrivilege);
+
+    // < Power Cap Enabled Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapEnabledGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapEnabledGet);
+
+    // < Power Cap Enabled Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapEnabledSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapEnabledSet);
+
+    // < Power Cap Capacity Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapMaxGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapMaxGet);
+
+    // < Power Cap Capacity Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapMaxSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapMaxSet);
+    // < Power Allocation Percentage Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerPowerCapGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerPowerCapGet);
+    // < Power Allocation Percentage Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerPowerCapSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerPowerCapSet);
+
+    // < Power Cap Min Capacity Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapMinSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapMinSet);
+    // < Power Cap Min Capacity Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdPowerCapMinGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapMinGet);
+
+    // < Power Cap Allocated Watts Get >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsGet,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapAllocatedWattsGet);
+
+    // < Power Cap Allocated Watts Set >
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsSet,
+                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapAllocatedWattsSet);
+
     return;
 }

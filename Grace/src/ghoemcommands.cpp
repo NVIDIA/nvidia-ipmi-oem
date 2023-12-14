@@ -41,6 +41,7 @@
 #include <sdbusplus/bus.hpp>
 #include <xyz/openbmc_project/Software/Activation/server.hpp>
 #include <xyz/openbmc_project/Software/Version/server.hpp>
+#include <boost/format.hpp>
 
 #include <algorithm>
 #include <array>
@@ -72,6 +73,10 @@ static constexpr const char* bmcStateReadyStr =
 // SEL policy in dbus
 const char* selLogObj = "/xyz/openbmc_project/logging/settings";
 const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
+
+// PLDM policy in dbus
+const char* pldmPollingObj = "/xyz/openbmc_project/pldm/sensor_polling";
+const char* pldmPollingIntf = "xyz.openbmc_project.Object.Enable";
 
 // Network object in dbus
 static constexpr auto networkServiceName = "xyz.openbmc_project.Network";
@@ -525,8 +530,10 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
         std::ofstream ofs(ctrlPaths[zone]);
         if (!ofs.is_open())
         {
-            phosphor::logging::log<level::ERR>(
-                "ipmiSetFanZonePWMDuty: Failed to open hwmon pwm file");
+            std::string errString = "ipmiSetFanZonePWMDuty: Failed to open hwmon pwm file. zone = " \
+                                    + std::to_string(zone) + ", pwm = " + std::to_string(pwm);
+            phosphor::logging::log<level::WARNING>(errString.c_str());
+
             return ipmi::response(ipmi::ccResponseError);
         }
         ofs << value;
@@ -541,21 +548,33 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
 
 ipmi::RspType<uint8_t> ipmiSetAllFanZonesPWMDuty(uint8_t request)
 {
+    bool isSetFanZonePWMDutySuccess = false;
+    ipmi::RspType<uint8_t> ret = ipmi::responseSuccess();
+
     for (int i = 0; i < nvidia::fanZones; i++)
     {
         for (int j = 1; j <= nvidia::pwm; j++)
         {
-            auto r = ipmiSetFanZonePWMDuty(i, j, request);
-            if (r != ipmi::responseSuccess())
+            ret = ipmiSetFanZonePWMDuty(i, j, request);
+            if (ret == ipmi::responseSuccess())
             {
-                phosphor::logging::log<level::ERR>(
-                    "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
-                return r;
+                // Return the CC to success if at least one value is present
+                isSetFanZonePWMDutySuccess = true;
             }
         }
     }
-    return ipmi::responseSuccess();
-    ;
+
+    if (isSetFanZonePWMDutySuccess == true)
+    {
+        return ipmi::responseSuccess();
+    }
+    else
+    {
+       phosphor::logging::log<level::ERR>(
+           "ipmiSetAllFanZonesPWMDuty: Failed to set zone");
+
+       return ret;
+    }
 }
 
 ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)
@@ -593,12 +612,23 @@ ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)
 
 ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
 {
+
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    auto pldmService = ipmi::getService(*dbus, pldmPollingIntf, pldmPollingObj);
+
     if (mode == 0x00)
     {
         /* stop services that scan sensors */
         std::string stopSensorScan = "systemctl stop ";
         stopSensorScan += nvidia::sensorScanSerivcesList;
         auto r = system(stopSensorScan.c_str());
+        
+        /* Stop polling PLDM sensors */
+        ipmi::setDbusProperty(*dbus, pldmService, pldmPollingObj,
+                                            pldmPollingIntf, "Enabled",bool(false));
+   
+
+        
         if (r != 0)
         {
             /* log that the stop failed */
@@ -606,8 +636,10 @@ ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
                 "ipmiSensorScanEnableDisable: failed to stop services");
             return ipmi::responseResponseError();
         }
+        
         return ipmi::responseSuccess();
     }
+
     else if (mode == 0x01)
     {
         /* start services */
@@ -615,15 +647,25 @@ ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
         startSensorScan += nvidia::sensorScanSerivcesList;
         auto r = system(startSensorScan.c_str());
 
+        /* Start polling PLDM sensors */
+        ipmi::setDbusProperty(*dbus, pldmService, pldmPollingObj,
+                                            pldmPollingIntf, "Enabled",bool(true));
+
+        
         if (r != 0)
         {
-            /* log that the stop failed */
+            /* log that the start failed */
             phosphor::logging::log<level::ERR>(
                 "ipmiSensorScanEnableDisable: failed to start services");
             return ipmi::responseResponseError();
         }
+
+        
         return ipmi::responseSuccess();
     }
+
+
+
     return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
@@ -955,7 +997,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
     std::ifstream jsonFile(channelConfigDefaultFilename);
     if (!jsonFile.good())
     {
-        log<level::INFO>("JSON file not found",
+        log<level::ERR>("JSON file not found",
                          entry("FILE_NAME=%s", channelConfigDefaultFilename));
         return ipmi::responseResponseError();
     }
@@ -967,7 +1009,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
     }
     catch (const nlohmann::json::parse_error& e)
     {
-        log<level::DEBUG>("Corrupted channel config.",
+        log<level::ERR>("Corrupted channel config.",
                           entry("MSG=%s", e.what()));
         return ipmi::responseResponseError();
     }
@@ -984,7 +1026,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
                 (jsonChData[nameString].get<std::string>() !=
                  redfishHostInterfaceChannel))
             {
-                log<level::WARNING>(
+                log<level::DEBUG>(
                     "Channel not configured for Redfish Host Interface",
                     entry("CHANNEL_NUM=%d", chNum));
                 continue;
@@ -1012,7 +1054,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
         }
         catch (const nlohmann::json::parse_error& e)
         {
-            log<level::DEBUG>("Json Exception caught.",
+            log<level::ERR>("Json Exception caught.",
                               entry("MSG=%s", e.what()));
             return ipmi::responseResponseError();
         }
@@ -1028,7 +1070,7 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
 bool getRfUuid(std::string& rfUuid)
 {
     std::ifstream persistentDataFilePath(
-        "/home/root/bmcweb_persistent_data.json");
+        "/var/lib/bmcweb/bmcweb_persistent_data.json");
     if (persistentDataFilePath.is_open())
     {
         auto data =
@@ -1376,7 +1418,6 @@ bool getRandomUserName(std::string& uniqueStr)
     std::ifstream randFp("/dev/urandom", std::ifstream::in);
     char byte;
     uint8_t maxStrSize = 16;
-    std::string invalidChar = "\'\"";
 
     if (!randFp.is_open())
     {
@@ -1410,6 +1451,44 @@ bool getRandomUserName(std::string& uniqueStr)
         uniqueStr.push_back(byte);
     }
     randFp.close();
+    return true;
+}
+
+/**
+ * Checks if a password is valid by performing the following validations:
+ *
+ * 1. Checks for the presence of adjacent characters that differ by one.
+ *    For example, "ab" and "321" would be considered invalid due to adjacent characters that differ by one.
+ *
+ * 2. Limits the number of adjacent characters to a threshold based on the password length.
+ *    In our case, since the password size is 16 characters, the threshold for adjacent characters is set to 4.
+ *    If the count of adjacent characters surpasses this threshold, the password is considered too simplistic/systematic.
+ *
+ * Note: The `fascist.c` file in CrackLib includes a function called `FascistLookUser`
+ *       that uses a similar logic to validate passwords. However, please note that
+ *       passwords generated by `getRandomPassword` may fail by CrackLib validation.
+ *       Therefore, isValidPassword is needed here.
+ *
+ * @param password The password string to be validated.
+ * @return True if the password is valid, false otherwise.
+ */
+bool isValidPassword(const std::string& password) {
+    int i = 0;
+    const char* ptr = password.c_str();
+
+    while (ptr[0] && ptr[1]) {
+        if ((ptr[1] == (ptr[0] + 1)) || (ptr[1] == (ptr[0] - 1))) {
+            i++;
+        }
+        ptr++;
+    }
+
+    int maxrepeat = 3 + (0.09 * password.length());
+    if (i > maxrepeat) {
+        phosphor::logging::log<level::DEBUG>(
+            "isValidPassword: Password is too simplistic/systematic");
+        return false;
+    }
     return true;
 }
 
@@ -1550,10 +1629,16 @@ bool isValidUserName(ipmi::Context::ptr ctx, const std::string& userName)
     return true;
 }
 
+#define RETRIES_EXCEEDED    10
+
 ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccount(ipmi::Context::ptr ctx,
                             uint8_t disableCredBootStrap)
 {
+    uint64_t oemStart = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count());
     try
     {
         // Check the CredentialBootstrapping property status,
@@ -1585,11 +1670,25 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             return ipmi::responseResponseError();
         }
 
-        ret = getRandomPassword(password);
-        if (!ret)
-        {
+        bool passwordIsValid = false;
+        int max_retries = RETRIES_EXCEEDED;
+
+        while (!passwordIsValid && (max_retries != 0)) {
+            ret = getRandomPassword(password);
+            if (!ret)
+            {
+                phosphor::logging::log<level::ERR>(
+                    "ipmiGetBootStrapAccount: Failed to generate alphanumeric "
+                    "Password");
+                return ipmi::responseResponseError();
+            }
+            passwordIsValid = isValidPassword(password);
+            max_retries--;
+        }
+
+        if (!passwordIsValid) {
             phosphor::logging::log<level::ERR>(
-                "ipmiGetBootStrapAccount: Failed to generate alphanumeric "
+                "ipmiGetBootStrapAccount: Failed to generate valid "
                 "Password");
             return ipmi::responseResponseError();
         }
@@ -1654,6 +1753,15 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                   std::back_inserter(respUserNameBuf));
         std::copy(password.begin(), password.end(),
                   std::back_inserter(respPasswordBuf));
+        uint64_t oemEnd = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count());
+        std::string info =
+            (boost::format("ipmiGetBootStrapAccount exe_time=%dms") %
+             (oemEnd - oemStart))
+                .str();
+        log<level::INFO>(info.c_str());
         return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
     }
     catch (const std::exception& e)
@@ -1925,6 +2033,82 @@ ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
 
 }
 
+ipmi::RspType<uint8_t> ipmicmdStandByPowerOnOff(uint8_t StandByPowerOption)
+{
+    int response;
+    if (StandByPowerOption == 0x00)
+    {
+        // To start nvidia-standby-poweroff 'run power' has to be DOWN i.e RUN_POWER_EN = 0
+        std::string standbyPoweroff = "systemctl start nvidia-standby-poweroff.service";
+        std::string runPower = "obmcutil poweroff";
+        auto r = system(runPower.c_str());
+        if (r != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Run Power Error: Run power is still UP");
+            
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
+        
+        auto s = system(standbyPoweroff.c_str());
+        if (s != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+            "Stand By Power OFF Error : Not able to set it UP");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+            
+        return ipmi::response(ipmi::ccSuccess);
+
+    }
+
+    else if (StandByPowerOption == 0x01)
+    {
+        // To start nvidia-standby-poweron 'run power' should be UP which will turn nvidia-standby-poweroff down and set RUN_POWER_PG = 1
+        std::string standbyPoweron = "systemctl start nvidia-standby-poweron.service";
+        std::string runPower = "obmcutil poweron";
+        auto r = system(runPower.c_str());
+        if (r != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Run Power Error: Run power is not coming UP");
+            
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
+        
+        auto s = system(standbyPoweron.c_str());
+        if (s != 0)
+        {
+            phosphor::logging::log<level::ERR>(
+            "Stand By Power ON Error : Not able to set it UP");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+            
+        return ipmi::response(ipmi::ccSuccess);
+
+    }
+
+return ipmi::response(ipmi::ccInvalidFieldRequest);
+
+}
+
+ipmi::RspType<uint8_t> ipmiStandbyPowerCycle()
+{
+    int response;
+    std::string standbyPowerCycle = "stbypowerctrl.sh aux_cycle";
+    phosphor::logging::log<level::INFO>(
+        "Starting standby power cycle");
+    auto r = system(standbyPowerCycle.c_str());
+    if (r != 0)
+    {
+        phosphor::logging::log<level::ERR>(
+            "Standby Power Cycle Error: Could not complete standby power cycle");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    return ipmi::response(ipmi::ccSuccess);
+}
 
 } // namespace ipmi
 
@@ -2178,6 +2362,25 @@ void registerNvOemFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetWpStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiOemMiscSetWP);
+  
+    // <set stand by power on-off>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::chassis::cmdStandByPower));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::chassis::cmdStandByPower,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdStandByPowerOnOff);
+
+    // <Standby Power Cycle>
+    log<level::NOTICE>(
+        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+        entry("Cmd:[%02Xh]", ipmi::nvidia::chassis::cmdStandbyPowerCycle));
+
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
+                          ipmi::nvidia::chassis::cmdStandbyPowerCycle,
+                          ipmi::Privilege::Admin, ipmi::ipmiStandbyPowerCycle);
 
     return;
 }
+

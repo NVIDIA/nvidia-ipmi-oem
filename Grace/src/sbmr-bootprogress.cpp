@@ -31,7 +31,9 @@ ipmi::RspType<uint8_t> ipmiSbmrSendBootProgressCode(
     if ((chInfo.mediumType !=
          static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20)) &&
         (chInfo.mediumType !=
-         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)))
+         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)) &&
+        (chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::oem)))
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmiSbmrSendBootProgressCode: Error - supported only in SSIF "
@@ -90,8 +92,11 @@ ipmi::RspType<std::vector<uint8_t>>
         auto respBootProgressCode = std::get<std::vector<uint8_t>>(getRecord);
         if (respBootProgressCode.empty() ||
             respBootProgressCode.size() != sbmrBootProgressSize)
-        {
-            return ipmi::responseUnspecifiedError();
+        {   
+	     phosphor::logging::log<phosphor::logging::level::ERR>
+	         ("ipmiSbmrGetBootProgressCode: xyz.openbmc_project.State.Boot.Raw"
+                 "not initialized, or the host power is OFF");
+	    return ipmi::responseUnspecifiedError();
         }
 
         return ipmi::responseSuccess(respBootProgressCode);
@@ -127,7 +132,10 @@ ipmi::RspType<uint8_t> ipmiOemSbmrSendDescription(
     if ((chInfo.mediumType !=
          static_cast<uint8_t>(ipmi::EChannelMediumType::smbusV20)) &&
         (chInfo.mediumType !=
-         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)))
+         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)) &&
+        (chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::oem)))
+
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "ipmiOemSbmrSendDescription: Error - supported only in SSIF "

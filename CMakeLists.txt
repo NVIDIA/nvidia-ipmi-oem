@@ -27,7 +27,26 @@ option (GH-oem-commands
 option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
-        
+
+
+#[[Optional support for Global Write-Protect FRU Edit Protection]]
+
+if(WP-GPIO AND WP-GPIO-CHIP)
+	
+	add_compile_definitions(WP_GPIO=${WP-GPIO})
+	add_compile_definitions(CHIP=${WP-GPIO-CHIP})
+	
+endif()
+
+option (custom-pwm-fan
+        "To support customize platforms pwm/fan configurations"
+        OFF)
+
+option (bf3-chassis-commands
+        "To support commands relevant only to BF3"
+        OFF)
+
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -85,15 +104,13 @@ if(GH-oem-commands)
 else()    
     if(BF2-OEM-COMMANDS)
     SET (flag_library_sources
-                src/oemcommands.cpp src/sensorcommands.cpp
-                src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                src/oemcommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/BF2/oemcommands.cpp
 		src/BF/chassiscommands.cpp
     )
     elseif(BF3-OEM-COMMANDS)
     SET(flag_library_sources
-                src/oemcommands.cpp src/sensorcommands.cpp
-                src/storagecommands.cpp src/sbmr-bootprogress.cpp
+                src/oemcommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/chassiscommands.cpp
         )
     else()
@@ -105,8 +122,22 @@ else()
 
 endif()
 
-add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
+if(custom-pwm-fan)
+    add_compile_definitions(CUSTOM_PWM_FAN=${custom-pwm-fan})
+    add_compile_definitions(CONFIG_PWM=${config-pwm})
+    add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME1=${config-fanZoneCtrlName1})
+    add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME2=${config-fanZoneCtrlName2})
+endif()
 
+if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS)
+    add_library ( znvipmioemcmds SHARED ${flag_library_sources})
+else()
+    add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
+endif()
+
+if(bf3-chassis-commands)
+    add_definitions (-DBF3_CHASSIS_COMMAND)
+endif()
 
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (znvipmioemcmds PROPERTIES SOVERSION "0")

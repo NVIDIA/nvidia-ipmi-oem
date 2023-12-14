@@ -8,7 +8,6 @@
 
 #include "biosversionutils.hpp"
 #include "dgx-a100-config.hpp"
-
 #include <bits/stdc++.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
@@ -203,67 +202,61 @@ static constexpr Cc ipmiCCBIOSPostCodeError = 0x89;
 static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
 static constexpr Cc ipmiCCCertificateNumberInvalid = 0xCB;
 
-static std::tuple <int, std::string>
-    execBusctlCmd(std::string cmd)
-{
-    char buffer[128];
-    std::string result = "";
-    std::string command = "busctl ";
-    command += cmd;
 
-    // Open pipe to file
-    FILE* pipe = popen(command.c_str(), "r");
-    if (!pipe) {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Exec busctl cmd popen failed!");
-	return make_tuple(-1, result);
-    }
-
-    // Read till end of process
-    while (!feof(pipe)) {
-        // Use buffer to read and add to result
-        if (fgets(buffer, 128, pipe) != NULL)
-            result += buffer;
-    }
-
-    // Return result with exit code
-    int ret = pclose(pipe);
-    return make_tuple(ret, result);
-}
-
-static std::tuple <int, std::string>
-    busctlSetProperty(std::string service,
+/* The function call to set or get dbus method. 
+service - dbus service to use.
+*obj - the dbus object .
+*inf - the dbus interface.
+*prop - the dbus property.
+*isSet - true for set method and fales for get method.
+*args - more arguments for the set/get method.
+*/
+static std::tuple <int,  std::vector<std::string>>
+    dbusctlSetGetProperty(std::string service,
                       std::string obj,
                       std::string inf,
                       std::string prop,
-                      std::string args)
+                      bool isSet,
+                      std::vector<std::string> args ={"None"}
+                     )
 {
-    // Set property
-    std::string cmd = "set-property ";
-    cmd += service + " ";
-    cmd += obj + " ";
-    cmd += inf + " ";
-    cmd += prop + " ";
-    cmd += args;
-
-    return execBusctlCmd(cmd);
+    int ret = 0;
+    std::vector<std::string> returnValueEmpty = {"None"};
+    try
+    {
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        if (isSet){
+            auto method = dbus->new_method_call(service.c_str(), obj.c_str(),
+                "org.freedesktop.DBus.Properties", "Set");
+            std::variant<std::vector<std::string>> args_tmp = args;
+            method.append(inf, prop, args_tmp);
+            auto reply = dbus->call(method);
+            return std::make_tuple(ret,returnValueEmpty);
+        }else{
+            auto method = dbus->new_method_call(service.c_str(), obj.c_str(),
+                "org.freedesktop.DBus.Properties", "Get");
+            method.append(inf, prop);
+            auto reply = dbus->call(method);
+            std::variant<std::vector<std::string>> value;
+            reply.read(value);
+            std::vector<std::string> retVector = std::get<std::vector<std::string>>(value);
+            return std::make_tuple(ret,retVector);
+        }
+    }
+    catch (const sdbusplus::exception::exception& e)
+    {
+        log<level::ERR>("set-property failed",
+                          entry("SERVICE=%s", service.c_str()),
+                          entry("OBJPATH=%s", obj.c_str()),
+                          entry("INTERFACE=%s", inf.c_str()),
+                          entry("PROP=%s", prop.c_str()));
+        ret = -1;       
+    }
+    return std::make_tuple(ret,returnValueEmpty);
 }
 
-static std::tuple <int, std::string>
-    busctlGetProperty(std::string service,
-                      std::string obj,
-                      std::string inf,
-                      std::string prop)
-{
-    // Get property
-    std::string cmd = "get-property ";
-    cmd += service + " ";
-    cmd += obj + " ";
-    cmd += inf + " ";
-    cmd += prop;
+    
 
-    return execBusctlCmd(cmd);
-}
 
 ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
 {
@@ -433,13 +426,14 @@ ipmi::RspType<std::vector<std::string>> ipmiGetDNSConfig()
     try
     {
         int ret;
-        std::string dnsServerStr;
+        std::vector<std::string> dnsServers;
         std::string networkServiceStr = networkService;
         // Improvement: Use dbus API for array of strings dbus property type
-        tie(ret, dnsServerStr) = busctlGetProperty(networkServiceStr,
+        tie(ret, dnsServers) = dbusctlSetGetProperty(networkServiceStr,
                                                    networkNTPObj,
                                                    networkNTPIntf,
-                                                   "StaticNameServers");
+                                                   "StaticNameServers",
+                                                   false);
         // Check return code
         if(ret)
         {
@@ -449,24 +443,13 @@ ipmi::RspType<std::vector<std::string>> ipmiGetDNSConfig()
         }
         // Parse the result
         // get-property format: as <size> <dnsserver1> <dnsserver2>
-        std::vector<std::string> dnsServers;
-        boost::split(dnsServers, dnsServerStr, boost::is_any_of(" "));
+
         // Populate DNS servers result
-        int dnsCount = stoi(dnsServers[1]);
-        for(int i = 2; i < (2+dnsCount); i++)
+        int dnsCount = dnsServers.size();
+        recordData.push_back(std::to_string(dnsServers.size()));
+        for(int i = 0; i < dnsCount; i++)
         {
-            std::string dns;
-            if (i == (dnsCount+1))
-            {
-                // Strip trailing `"\n`
-                dns = dnsServers[i].substr(1, dnsServers[i].length() - 3);
-            }
-            else
-            {
-                // Strip trailing `"`
-                dns = dnsServers[i].substr(1, dnsServers[i].length() - 2);
-            }
-            recordData.push_back(dns);
+            recordData.push_back(dnsServers[i]);
         }
     }
     catch (std::exception& e)
@@ -483,7 +466,8 @@ ipmi::RspType<uint8_t> ipmiSetDNSConfig(std::vector<std::string> dnsServers)
     try
     {
         // Add args
-        std::string args = "as ";
+        /*
+        std::string args;
         std::string s = std::to_string(dnsServers.size());
         // Add array string size
         args += s;
@@ -493,15 +477,17 @@ ipmi::RspType<uint8_t> ipmiSetDNSConfig(std::vector<std::string> dnsServers)
         {
             args += " " + *it;
         }
+        */
         // Improvement: Use dbus API for array of strings dbus property type
         int ret;
-        std::string dnsServerStr;
+        std::vector<std::string> dnsServerStr;
         std::string networkServiceStr = networkService;
-        tie(ret, dnsServerStr) = busctlSetProperty(networkServiceStr,
+        tie(ret, dnsServerStr) = dbusctlSetGetProperty(networkServiceStr,
                                                    networkNTPObj,
                                                    networkNTPIntf,
                                                    "StaticNameServers",
-                                                   args);
+                                                   true,
+                                                   dnsServers);
         // Check return code
         if (ret)
         {
@@ -572,13 +558,15 @@ ipmi::RspType<uint8_t,                 // NTP Status
     try
     {
         int ret;
-        std::string ntpServerStr;
+        std::vector<std::string> ntpServers;
         std::string networkServiceStr = networkService;
         // Improvement: Use dbus API for array of strings dbus property type
-        tie(ret, ntpServerStr) = busctlGetProperty(networkServiceStr,
+        tie(ret, ntpServers) = dbusctlSetGetProperty(networkServiceStr,
                                                    networkNTPObj,
                                                    networkNTPIntf,
-                                                   "NTPServers");
+                                                   "NTPServers",
+                                                   false
+                                                   );
         // Check return code
         if(ret)
         {
@@ -586,25 +574,24 @@ ipmi::RspType<uint8_t,                 // NTP Status
                 phosphor::logging::entry("rc= %d", ret));
             return ipmi::responseResponseError();
         }
-        // Parse the result
-        // get-property format: as <size> <ntpserver1> <ntpserver2>
-        std::vector<std::string> ntpServers;
-        boost::split(ntpServers, ntpServerStr, boost::is_any_of(" "));
+
+
         // Check NTP Servers exists
-        if (stoi(ntpServers[1]) > 0)
+        recordData.push_back(std::to_string(ntpServers.size()));
+        if (ntpServers.size() > 0)
         {
             // Strip trailing `"\n`
             std::string ntp;
-            if (stoi(ntpServers[1]) > 1)
+            if (ntpServers.size() > 1)
             {
-                ntp = ntpServers[2].substr(1, ntpServers[2].length() - 2);
+                ntp = ntpServers[0];
                 recordData.push_back(ntp);
-                ntp = ntpServers[3].substr(1, ntpServers[3].length() - 3);
+                ntp = ntpServers[1];
                 recordData.push_back(ntp);
             }
             else
             {
-                ntp = ntpServers[2].substr(1, ntpServers[2].length() - 3);
+                ntp = ntpServers[0];
                 recordData.push_back(ntp);
             }
         }
@@ -669,13 +656,14 @@ ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>&
             }
             // Get NTP servers
             int ret;
-            std::string ntpServerStr;
+            std::vector<std::string> ntpServers;
             std::string networkServiceStr = networkService;
             // Improvement: Use dbus API for array of strings dbus property type
-            tie(ret, ntpServerStr) = busctlGetProperty(networkServiceStr,
+            tie(ret, ntpServers) = dbusctlSetGetProperty(networkServiceStr,
                                                        networkNTPObj,
                                                        networkNTPIntf,
-                                                       "NTPServers");
+                                                       "NTPServers",
+                                                       false);
             // Check return code
             if (ret)
             {
@@ -683,20 +671,18 @@ ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>&
                     phosphor::logging::entry("rc= %d", ret));
                 return ipmi::responseResponseError();
             }
-            std::vector<std::string> ntpServers;
             std::string pri = "";
             std::string sec = "";
-            boost::split(ntpServers, ntpServerStr, boost::is_any_of(" "));
             // Get old primary and secondary
             // Strip trailing `"\n`
-            if (stoi(ntpServers[1]) > 1)
+            if (ntpServers.size() > 1)
             {
-                pri = ntpServers[2].substr(1, ntpServers[2].length() - 2);
-                sec = ntpServers[3].substr(1, ntpServers[3].length() - 3);
+                pri = ntpServers[0];
+                sec = ntpServers[1];
             }
-            else if (stoi(ntpServers[1]) > 0)
+            else if (ntpServers.size() > 0)
             {
-                pri = ntpServers[2].substr(1, ntpServers[2].length() - 3);
+                pri = ntpServers[0];
             }
             // Get new primary and secondary
             if (ntpOption == 0x00)
@@ -704,6 +690,7 @@ ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>&
                 // Set primary NTP
                 std::string newPri(ntpserver.begin(), ntpserver.end());
                 pri = newPri;
+                sec = "";
             }
             else
             {
@@ -716,31 +703,28 @@ ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>&
                 sec = newSec;
             }
             // Add args
-            std::string args = "as ";
+            std::vector<std::string> args;
+            
             // Add array string size
-            if (sec == "")
-            {
-                args += "1 ";
-            }
-            else
-            {
-                args += "2 ";
-            }
             // Add ntpserver strings
             if (pri != "")
             {
-                args += pri;
+                args.push_back(pri);
+                //args += pri;
             }
             if (sec != "")
             {
-                args += " " + sec;
+                //args += " " + sec;
+                args.push_back(" "+sec);
             }
+            std::vector<std::string> ntpServersSet;
             // Improvement: Use dbus API for array of strings dbus property type
-            tie(ret, ntpServerStr) = busctlSetProperty(networkServiceStr,
+            tie(ret, ntpServersSet) = dbusctlSetGetProperty(networkServiceStr,
                                                        networkNTPObj,
                                                        networkNTPIntf,
                                                        "NTPServers",
-                                                       args);
+                                                       true,
+                                                       args );
             // Check return code
             if (ret)
             {
@@ -3160,7 +3144,6 @@ bool getRandomUserName(std::string& uniqueStr)
     std::ifstream randFp("/dev/urandom", std::ifstream::in);
     char byte;
     uint8_t maxStrSize = 16;
-    std::string invalidChar = "\'\"";
 
     if (!randFp.is_open())
     {
@@ -3197,12 +3180,50 @@ bool getRandomUserName(std::string& uniqueStr)
     return true;
 }
 
+/**
+ * Checks if a password is valid by performing the following validations:
+ *
+ * 1. Checks for the presence of adjacent characters that differ by one.
+ *    For example, "ab" and "321" would be considered invalid due to adjacent characters that differ by one.
+ *
+ * 2. Limits the number of adjacent characters to a threshold based on the password length.
+ *    In our case, since the password size is 16 characters, the threshold for adjacent characters is set to 4.
+ *    If the count of adjacent characters surpasses this threshold, the password is considered too simplistic/systematic.
+ *
+ * Note: The `fascist.c` file in CrackLib includes a function called `FascistLookUser`
+ *       that uses a similar logic to validate passwords. However, please note that
+ *       passwords generated by `getRandomPassword` may fail by CrackLib validation.
+ *       Therefore, isValidPassword is needed here.
+ *
+ * @param password The password string to be validated.
+ * @return True if the password is valid, false otherwise.
+ */
+bool isValidPassword(const std::string& password) {
+    int i = 0;
+    const char* ptr = password.c_str();
+
+    while (ptr[0] && ptr[1]) {
+        if ((ptr[1] == (ptr[0] + 1)) || (ptr[1] == (ptr[0] - 1))) {
+            i++;
+        }
+        ptr++;
+    }
+
+    int maxrepeat = 3 + (0.09 * password.length());
+    if (i > maxrepeat) {
+        phosphor::logging::log<level::DEBUG>(
+            "isValidPassword: Password is too simplistic/systematic");
+        return false;
+    }
+    return true;
+}
+
 bool getRandomPassword(std::string& uniqueStr)
 {
     std::ifstream randFp("/dev/urandom", std::ifstream::in);
     char byte;
     uint8_t maxStrSize = 16;
-    std::string invalidChar = "\'\"";
+    std::string invalidChar = "\'\\\"";
 
     if (!randFp.is_open())
     {
@@ -3334,6 +3355,7 @@ bool isValidUserName(ipmi::Context::ptr ctx, const std::string& userName)
     return true;
 }
 
+#define RETRIES_EXCEEDED    10
 
 ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccount(ipmi::Context::ptr ctx,
@@ -3370,12 +3392,26 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             return ipmi::responseResponseError();
         }
 
-        ret = getRandomPassword(password);
-        if (!ret)
-        {
+        bool passwordIsValid = false;
+        int max_retries = RETRIES_EXCEEDED;
+
+        while (!passwordIsValid && (max_retries != 0)) {
+            ret = getRandomPassword(password);
+            if (!ret)
+            {
+                phosphor::logging::log<level::ERR>(
+                    "ipmiGetBootStrapAccount: Failed to generate alphanumeric "
+                    "Password");
+                return ipmi::responseResponseError();
+            }
+            passwordIsValid = isValidPassword(password);
+            max_retries--;
+        }
+
+        if (!passwordIsValid) {
             phosphor::logging::log<level::ERR>(
-                "ipmiGetBootStrapAccount: Failed to generate alphanumeric "
-                "Password");
+                    "ipmiGetBootStrapAccount: Failed to generate valid "
+                    "Password");
             return ipmi::responseResponseError();
         }
 
@@ -3388,58 +3424,40 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                                             userMgrInterface, createUserMethod);
         method.append(userName, std::vector<std::string>{"redfish-hostiface"},
                       "priv-admin", true);
-        // asynchronous method call to avoid ssif timeout
-        dbus->async_send(method, [dbus, service, userName, password,
-                                  disableCredBootStrap](
-                                     boost::system::error_code ec,
-                                     sdbusplus::message_t& reply) {
-            if (ec || reply.is_method_error())
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "Error returns from call to dbus. BootStrap Failed");
-                return;
-            }
+        auto reply = dbus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error returns from call to dbus. BootStrap Failed");
+            return ipmi::responseResponseError();
+        }
 
-            // update the password
-            int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
-            if (retval != PAM_SUCCESS)
-            {
-                dbus->async_method_call(
-                    [](boost::system::error_code ec2, sdbusplus::message_t& m) {
-                        if (ec2 || m.is_method_error())
-                        {
-                            phosphor::logging::log<
-                                phosphor::logging::level::ERR>(
-                                "Error returns from call to dbus. delete user "
-                                "failed");
-                            return;
-                        }
-                    },
-                    service.c_str(),
-                    std::string(userMgrObjBasePath)
-                        .append("/")
-                        .append(userName),
-                    usersDeleteIface, "Delete");
+        // update the password
+        boost::system::error_code ec;
+        int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
+        if (retval != PAM_SUCCESS)
+        {
+            dbus->yield_method_call<void>(ctx->yield, ec, service.c_str(),
+                                          userMgrObjBasePath + userName,
+                                          usersDeleteIface, "Delete");
 
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "ipmiGetBootStrapAccount : Failed to update password.");
-                return;
-            }
-            else
-            {
-                // update the "CredentialBootstrap" Dbus property w.r.to
-                // disable crendential BootStrap status
-                setCredentialBootStrap(disableCredBootStrap);
-            }
-            return;
-        });
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiGetBootStrapAccount : Failed to update password.");
+            return ipmi::responseUnspecifiedError();
+        }
+        else
+        {
+            // update the "CredentialBootstrap" Dbus property w.r.to
+            // disable crendential BootStrap status
+            setCredentialBootStrap(disableCredBootStrap);
 
-        std::vector<uint8_t> respUserNameBuf, respPasswordBuf;
-        std::copy(userName.begin(), userName.end(),
-                  std::back_inserter(respUserNameBuf));
-        std::copy(password.begin(), password.end(),
-                  std::back_inserter(respPasswordBuf));
-        return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
+            std::vector<uint8_t> respUserNameBuf, respPasswordBuf;
+            std::copy(userName.begin(), userName.end(),
+                      std::back_inserter(respUserNameBuf));
+            std::copy(password.begin(), password.end(),
+                      std::back_inserter(respPasswordBuf));
+            return ipmi::responseSuccess(respUserNameBuf, respPasswordBuf);
+        }
     }
     catch (const std::exception& e)
     {
@@ -3449,7 +3467,6 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         return ipmi::responseResponseError();
     }
 }
-
 
 ipmi::RspType<std::vector<uint8_t>>
     ipmiGetManagerCertFingerPrint(ipmi::Context::ptr ctx, uint8_t certNum)
