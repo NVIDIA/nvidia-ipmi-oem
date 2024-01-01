@@ -97,43 +97,43 @@ struct PropertyInfo
 };
 
 const PropertyInfo nicAttributeInfo = {
-    .intf = "xyz.openbmc_project.Control.NicAttribute",
+    .intf = "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicAttribute",
     .prop = "NicAttribute",
-    .strToInt = {{"xyz.openbmc_project.Control.NicAttribute.Modes.Enabled", 1},
-                {"xyz.openbmc_project.Control.NicAttribute.Modes.Disabled", 0},
-                {"xyz.openbmc_project.Control.NicAttribute.Modes.Invaild", -1}},
-    .intToStr = {{1, "xyz.openbmc_project.Control.NicAttribute.Modes.Enabled"},
-                {0, "xyz.openbmc_project.Control.NicAttribute.Modes.Disabled"}}
+    .strToInt = {{"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicAttribute.Modes.Enabled", 1},
+                {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicAttribute.Modes.Disabled", 0},
+                {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicAttribute.Modes.Invaild", -1}},
+    .intToStr = {{1, "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicAttribute.Modes.Enabled"},
+                {0, "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicAttribute.Modes.Disabled"}}
 };
 
 const PropertyInfo nicTristateAttributeInfo = {
-    .intf = "xyz.openbmc_project.Control.NicTristateAttribute",
+    .intf = "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute",
     .prop = "NicTristateAttribute",
-    .strToInt = {{"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Default", 0},
-                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Enabled", 1},
-                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Disabled", 2},
-                 {"xyz.openbmc_project.Control.NicTristateAttribute.Modes.Invaild", -1}},
-    .intToStr = {{0, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Default"},
-                 {1, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Enabled"},
-                 {2, "xyz.openbmc_project.Control.NicTristateAttribute.Modes.Disabled"}}
+    .strToInt = {{"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Default", 0},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Enabled", 1},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Disabled", 2},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Invaild", -1}},
+    .intToStr = {{0, "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Default"},
+                 {1, "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Enabled"},
+                 {2, "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.NicTristateAttribute.Modes.Disabled"}}
 };
 
 const PropertyInfo smartNicOsStateInfo = {
-    .intf = "xyz.openbmc_project.Control.SmartNicOsState",
+    .intf = "xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState",
     .prop = "SmartNicOsState",
-    .strToInt = {{"xyz.openbmc_project.Control.SmartNicOsState.Modes.BootRom", 0},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.BL2", 1},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.BL31", 2},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.UEFI", 3},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsStarting", 4},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsIsRunning", 5},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.LowPowerStandby", 6},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FirmwareUpdateInProgress", 7},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsCrashDumpInProgress", 8},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.OsCrashDumpIsComplete", 9},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FWFaultCrashDumpInProgress", 10},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.FWFaultCrashDumpIsComplete", 11},
-                 {"xyz.openbmc_project.Control.SmartNicOsState.Modes.Invalid", -1}},
+    .strToInt = {{"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.BootRom", 0},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.BL2", 1},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.BL31", 2},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.UEFI", 3},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.OsStarting", 4},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.OsIsRunning", 5},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.LowPowerStandby", 6},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.FirmwareUpdateInProgress", 7},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.OsCrashDumpInProgress", 8},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.OsCrashDumpIsComplete", 9},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.FWFaultCrashDumpInProgress", 10},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.FWFaultCrashDumpIsComplete", 11},
+                 {"xyz.openbmc_project.Control.NcSi.OEM.Nvidia.SmartNicOsState.Modes.Invalid", -1}},
     .intToStr = {}
 };
 
