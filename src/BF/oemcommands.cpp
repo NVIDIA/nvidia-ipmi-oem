@@ -1822,6 +1822,11 @@ static ipmi::RspType<> ipmicmdPowerCapGenericSet(
     static ipmi::RspType<> ipmicmdPowerPowerCapSet(ipmi::Context::ptr ctx,
                                                    uint8_t parameter)
     {
+        if (ctx->channel != localChannel){
+            log<level::ERR>("Running the command is allowed only from BMC");
+            return ipmi::response(ipmi::ccResponseError);
+        }
+
         if (parameter > 100)
         {
             log<level::ERR>("ipmicmdPowerPowerCapSet: Invalid input,"
