@@ -28,6 +28,9 @@ option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
 
+option (disable-smbpbi-passthru
+        "To disable SMBPBI passthru commands"
+        OFF)
 
 #[[Optional support for Global Write-Protect FRU Edit Protection]]
 
@@ -120,6 +123,12 @@ else()
 
     endif()
 
+endif()
+
+if(disable-smbpbi-passthru)
+    add_definitions (-DENABLE_SMBPBI_PASSTHRU=0)
+else()
+    add_definitions (-DENABLE_SMBPBI_PASSTHRU=1)
 endif()
 
 if(custom-pwm-fan)
