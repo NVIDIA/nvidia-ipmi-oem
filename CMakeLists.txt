@@ -149,6 +149,7 @@ target_link_libraries (znvipmioemcmds -luserlayer)
 target_link_libraries (znvipmioemcmds -lchannellayer)
 target_link_libraries (znvipmioemcmds ${OPENSSL_CRYPTO_LIBRARY})
 target_link_libraries (znvipmioemcmds gpiodcxx)
+target_link_libraries (znvipmioemcmds pam)
 
 install (TARGETS znvipmioemcmds DESTINATION lib/ipmid-providers)
 
