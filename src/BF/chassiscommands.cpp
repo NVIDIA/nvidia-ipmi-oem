@@ -119,7 +119,7 @@ void registerChassisFunctions()
 
     ipmi::registerHandler(ipmi::prioCustomBase, ipmi::netFnChassis,
                           ipmi::chassis::cmdChassisControl,
-                          ipmi::Privilege::User, ipmi::ipmiChassisPowerBF);
+                          ipmi::Privilege::Operator, ipmi::ipmiChassisPowerBF);
 
     // <Set Power Restore Policy>
     log<level::NOTICE>(
