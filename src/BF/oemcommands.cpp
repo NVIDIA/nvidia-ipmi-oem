@@ -359,7 +359,20 @@ namespace ipmi
     
         return ipmi::responseSuccess(0x00, readBuf);
     
-    } 
+    }
+
+    bool gpioUnexportLF(uint32_t gpio) {
+        std::ofstream unexportFile("/sys/class/gpio/unexport");
+        if (!unexportFile.is_open()) {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to open gpio unexport!");
+            return false;
+        }
+        unexportFile << gpio;
+        unexportFile.close();
+        return true;
+    }
+
     static int gpioExportLF(uint32_t gpio) {
         if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio))) {
             std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
@@ -376,10 +389,18 @@ namespace ipmi
 
     static bool setGpioRawLF(uint32_t gpio, uint32_t value) {
         int gp = gpioExportLF(gpio);
+        if (gp < 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to export gpio!");
+            return false;
+        }
+
         std::ofstream directionOf("/sys/class/gpio/gpio" + std::to_string(gp) + "/direction", std::ofstream::out);
         if (!directionOf.is_open()) {
             phosphor::logging::log<phosphor::logging::level::ERR>(
                 "Failed to open gpio direction!");
+            gpioUnexportLF(gpio);
             return false;
         }
         /* set to ouput, then set value */
@@ -389,10 +410,12 @@ namespace ipmi
         if (!valueOf.is_open()) {
             directionOf.close();
             phosphor::logging::log<phosphor::logging::level::ERR>("Failed to open gpio value!");
+            gpioUnexportLF(gpio);
             return false;
         }
         valueOf << value;
         valueOf.close();
+        gpioUnexportLF(gpio);
         return true;
     }
 
@@ -440,7 +463,7 @@ namespace ipmi
             phosphor::logging::log<level::ERR>("failed to write to SOC_RESET gpio");
             cleanGpio();
             return false;
-            }  
+            }
         return true;
     }
 
@@ -451,7 +474,7 @@ namespace ipmi
                 phosphor::logging::log<level::ERR>("SOC_HARD_RST Command failed, can't change GPIO's to 0");
                 return false;   
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(ipmi::nvidia::resetPause));
+        std::this_thread::sleep_for(std::chrono::milliseconds(ipmi::nvidia::resetPause));
         if (!changeSocRstAndPreRstGpios(ipmi::nvidia::gpioHigh)){
                 phosphor::logging::log<level::ERR>("SOC_HARD_RST Command failed, can't return GPIO's to 1");
                 return false;  
