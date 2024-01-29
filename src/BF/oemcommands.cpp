@@ -622,7 +622,7 @@ namespace ipmi
     }
         ipmi::RspType<uint8_t> ipmiGetFwBootupSlotBF(uint8_t FwType)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetFwBootupSlot command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetFwBootupSlot command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
@@ -638,7 +638,7 @@ namespace ipmi
         uint8_t execute // Execute bit : 0x80 fixed
         )
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSMBPBIPassthroughCmd command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSMBPBIPassthroughCmd command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
@@ -652,34 +652,34 @@ namespace ipmi
         uint8_t execute // Execute bit : 0x1f fixed
         )
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSMBPBIPassthroughExtendedCm command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSMBPBIPassthroughExtendedCm command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t>
     ipmiSetFanZonePWMDutyBF(uint8_t zone, uint8_t request)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSetFanZonePWMDuty command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSetFanZonePWMDuty command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t>
     ipmiSetAllFanZonesPWMDutyBF(uint8_t request)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSetAllFanZonesPWMDuty command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSetAllFanZonesPWMDuty command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t> ipmiSetFanControlBF(uint8_t mode) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSetFanControl command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSetFanControl command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
 
     ipmi::RspType<uint8_t> ipmiGetBiosPostStatusBF(uint8_t requestData)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetBiosPostStatus command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetBiosPostStatus command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
@@ -687,20 +687,20 @@ namespace ipmi
     ipmi::RspType<uint16_t, uint16_t, std::vector<uint8_t>>
         ipmiGetBiosPostCodeBF(ipmi::Context::ptr ctx)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetBiosPostCode command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetBiosPostCode command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<> ipmiOemSoftRebootBF()
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemSoftReboot command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemSoftReboot command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
 
     ipmi::RspType<uint8_t, std::vector<uint8_t>> ipmiOemMiscFirmwareVersionBF(ipmi::Context::ptr ctx, uint8_t device)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemMiscFirmwareVersion command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemMiscFirmwareVersion command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
@@ -708,114 +708,114 @@ namespace ipmi
 
     ipmi::RspType<uint8_t> ipmiOemMiscGetWPBF(uint8_t type, uint8_t id)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemMiscGetWP command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemMiscGetWP command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<> ipmiOemMiscSetWPBF(uint8_t type, uint8_t id, uint8_t value)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemMiscSetWP command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemMiscSetWP command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t> ipmiOemGetSSDLedBF(uint8_t type, uint8_t instance)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetSSDLed command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetSSDLed command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<> ipmiOemSetSSDLedBF(uint8_t type, uint8_t instance, uint8_t pattern) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemSetSSDLed command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemSetSSDLed command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t> ipmiOemGetLedStatusBF(uint8_t type) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetLedStatus command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetLedStatus command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
 
     ipmi::RspType<> ipmiSensorScanEnableDisableBF(uint8_t mode) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSensorScanEnableDisable command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiSensorScanEnableDisable command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint16_t, uint16_t, uint8_t> ipmiOemPsuPowerBF(uint8_t type, uint8_t id) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemPsuPower command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemPsuPower command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<> ipmiBiosSetVersionBF(uint8_t major, uint8_t minor) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosSetVersion command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosSetVersion command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t> ipmiBiosGetBootImageBF(void) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetBootImage command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetBootImage command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
     ipmi::RspType<uint8_t> ipmiBiosGetNextBootImageBF(void){
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetNextBootImage command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetNextBootImage command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     } 
 
     ipmi::RspType<> ipmiBiosSetNextBootImageBF(uint8_t bootimage)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosSetNextBootImage command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosSetNextBootImage command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t, uint8_t> ipmiBiosGetVerionBF(uint8_t image) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetVerion command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetVerion command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t> ipmiBiosGetConfigBF(uint8_t type) 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetConfig command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosGetConfig command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<> ipmiBiosSetConfigBF(uint8_t type) {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosSetConfig command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiBiosSetConfig command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t, uint8_t> ipmiGetUsbDescriptionBF(uint8_t type){
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetUsbDescriptioncommand is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetUsbDescriptioncommand is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<std::vector<uint8_t>> ipmiGetUsbSerialNumBF()
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetUsbSerialNum command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetUsbSerialNum command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHiBF()
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetipmiChannelRfHi command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetipmiChannelRfHi command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<std::vector<uint8_t>>
         ipmiGetManagerCertFingerPrintBF(ipmi::Context::ptr ctx, uint8_t certNum)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetManagerCertFingerPrint command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiGetManagerCertFingerPrint command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
     ipmi::RspType<uint8_t, std::vector<uint8_t>>
         ipmiOemGetMaxPMaxQConfigurationBF(uint8_t parameter)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetMaxPMaxQConfiguration command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemGetMaxPMaxQConfiguration command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
@@ -824,7 +824,7 @@ namespace ipmi
                                         std::vector<uint8_t> dataIn)
 
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemSetMaxPMaxQConfiguration command is unsupported in Bluefield 2/3");
+        phosphor::logging::log<phosphor::logging::level::ERR>("ipmiOemSetMaxPMaxQConfiguration command is unsupported in Spectre / Bluefield 2/3");
         return ipmi::response(ipmi::ccResponseError);
     }
 
