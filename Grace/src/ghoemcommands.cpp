@@ -1023,8 +1023,8 @@ ipmi::RspType<uint8_t> ipmiGetipmiChannelRfHi()
             std::string chKey = std::to_string(chNum);
             nlohmann::json jsonChData = data[chKey].get<nlohmann::json>();
             if (jsonChData.is_null() ||
-                (jsonChData[nameString].get<std::string>() !=
-                 redfishHostInterfaceChannel))
+                (jsonChData[nameString].get<std::string>().find(
+                 redfishHostInterfaceChannel) == std::string::npos))
             {
                 log<level::DEBUG>(
                     "Channel not configured for Redfish Host Interface",
@@ -2124,6 +2124,8 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetOEMVersion,
                           ipmi::Privilege::User, ipmi::ipmiGetOEMVersion);
 
+ #ifdef ENABLE_SMBPBI_PASSTHRU
+    #if ENABLE_SMBPBI_PASSTHRU == 1
     // <Execute SMBPBI passthrough command>
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
@@ -2143,6 +2145,8 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdSMBPBIPassthroughExtended,
                           ipmi::Privilege::Admin,
                           ipmi::ipmiSMBPBIPassthroughExtendedCmd);
+    #endif
+#endif
 
     // <Set fan control mode>
     log<level::NOTICE>("Registering ",

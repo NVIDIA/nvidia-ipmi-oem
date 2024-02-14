@@ -28,6 +28,9 @@ option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
 
+option (disable-smbpbi-passthru
+        "To disable SMBPBI passthru commands"
+        OFF)
 
 #[[Optional support for Global Write-Protect FRU Edit Protection]]
 
@@ -101,8 +104,14 @@ if(GH-oem-commands)
     SET(flag_library_sources
         Grace/src/ghoemcommands.cpp Grace/src/sbmr-bootprogress.cpp
     )
-else()    
-    if(BF2-OEM-COMMANDS)
+else()
+    if(SPECTRE-OEM-COMMANDS)
+    SET (flag_library_sources
+                src/oemcommands.cpp src/sbmr-bootprogress.cpp
+                src/BF/oemcommands.cpp src/BF/spectre/oemcommands.cpp
+		src/BF/chassiscommands.cpp
+    )
+    elseif(BF2-OEM-COMMANDS)
     SET (flag_library_sources
                 src/oemcommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/BF2/oemcommands.cpp
@@ -122,6 +131,12 @@ else()
 
 endif()
 
+if(disable-smbpbi-passthru)
+    add_definitions (-DENABLE_SMBPBI_PASSTHRU=0)
+else()
+    add_definitions (-DENABLE_SMBPBI_PASSTHRU=1)
+endif()
+
 if(custom-pwm-fan)
     add_compile_definitions(CUSTOM_PWM_FAN=${custom-pwm-fan})
     add_compile_definitions(CONFIG_PWM=${config-pwm})
@@ -129,7 +144,7 @@ if(custom-pwm-fan)
     add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME2=${config-fanZoneCtrlName2})
 endif()
 
-if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS)
+if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)
     add_library ( znvipmioemcmds SHARED ${flag_library_sources})
 else()
     add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
