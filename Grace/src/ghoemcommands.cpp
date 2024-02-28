@@ -2033,6 +2033,37 @@ ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
 
 }
 
+
+bool isServiceActive(const std::string& serviceName)
+{
+    std::variant<std::string> propertyValue;
+    std::string activeState;
+    std::string objectPath = "/org/freedesktop/systemd1/unit/" + serviceName;
+    auto bus = getSdBus();
+    auto message =
+        bus->new_method_call("org.freedesktop.systemd1",
+                             objectPath.c_str(),
+                             "org.freedesktop.DBus.Properties",
+                             "Get");
+
+    message.append("org.freedesktop.systemd1.Unit", "ActiveState");
+
+    try
+    {
+        auto response = bus->call(message);
+        response.read(propertyValue);
+        activeState = std::get<std::string>(propertyValue);
+        return (activeState == "active");
+    }
+    catch (const std::exception& e)
+    {
+        log<level::ERR>(
+            "Failed to get the service state",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return false;
+    }
+}
+
 ipmi::RspType<uint8_t> ipmicmdStandByPowerOnOff(uint8_t StandByPowerOption)
 {
     int response;
@@ -2088,6 +2119,29 @@ ipmi::RspType<uint8_t> ipmicmdStandByPowerOnOff(uint8_t StandByPowerOption)
             
         return ipmi::response(ipmi::ccSuccess);
 
+    }
+    else if (StandByPowerOption == 0x02)
+    {
+        constexpr uint8_t standbyPowerOn = 0x1;
+        constexpr uint8_t standbyPowerOff = 0x0;
+        bool isStandbyPowerOffServiceActive = isServiceActive("nvidia_2dstandby_2dpoweroff_2eservice");
+        bool isStandbyPowerOnServiceActive = isServiceActive("nvidia_2dstandby_2dpoweron_2eservice");
+        uint8_t standbyPowerStatus = 0;
+        if (isStandbyPowerOffServiceActive == false && \
+            isStandbyPowerOnServiceActive == false)
+        {
+            standbyPowerStatus = standbyPowerOn;
+        }
+        else if (isStandbyPowerOffServiceActive == false)
+        {
+            standbyPowerStatus = standbyPowerOn;
+        }
+        else
+        {
+            standbyPowerStatus = standbyPowerOff;
+        }
+
+        return ipmi::responseSuccess(standbyPowerStatus);
     }
 
 return ipmi::response(ipmi::ccInvalidFieldRequest);
