@@ -79,9 +79,15 @@ namespace ipmi
         return ipmi::response(ipmi::ccResponseError);
     }
 
-    ipmi::RspType<uint8_t>ipmicmdPowerCapSet(ipmi::Context::ptr ctx, uint8_t parameter)
+    ipmi::RspType<uint8_t> ipmicmdPowerCapSet(ipmi::Context::ptr ctx, uint8_t parameter)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>("Power Capping not supported in Bluefield 2");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+
+    ipmi::RspType<uint8_t> ipmiCmdERoTReset(ipmi::Context::ptr ctx)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>("ERoT reset is not supported in Bluefield 2");
         return ipmi::response(ipmi::ccResponseError);
     }
 
@@ -185,6 +191,11 @@ void registerNvOemPlatformFunctionsBF2()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::CmdPowerCapAllocatedWattsSet,
                           ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
+
+    // <ERoT Reset>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdERoTReset,
+                          ipmi::Privilege::Admin, ipmi::ipmiCmdERoTReset);
 
     return;
 

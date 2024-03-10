@@ -1881,6 +1881,51 @@ static ipmi::RspType<> ipmicmdPowerCapGenericSet(
         return ipmi::responseResponseError();
     }
 
+    static ipmi::RspType<uint8_t> ipmiCmdERoTReset(ipmi::Context::ptr ctx)
+    {
+        enum EROTRstErr {NoErr = 0, UpdateInProgress = 1, NoFwPending = 2, CmdNotSupported = 3};
+        std::string erotResetPrePath = "/usr/bin/erot_reset_pre.sh";
+        std::string erotResetPath = "/usr/bin/erot_reset.sh";
+
+        if ((!std::filesystem::exists(erotResetPrePath)) ||
+            (!std::filesystem::exists(erotResetPath)))
+        {
+            return ipmi::response(ipmi::ccCommandNotAvailable);
+        }
+
+        try
+        {
+            int errorCode = executeCmd(erotResetPrePath.c_str());
+
+            if (errorCode == EROTRstErr::UpdateInProgress)
+            {
+                log<level::ERR>("Cannot perform ERoT self reset: An update is in progress");
+                return ipmi::response(ipmi::ccCommandDisabled);
+            }
+
+            if (errorCode == EROTRstErr::NoFwPending)
+            {
+                log<level::ERR>("Cannot perform ERoT self reset: There is no EC FW pending");
+                return ipmi::response(ccCommandDisabled);
+            }
+
+            if (errorCode == EROTRstErr::CmdNotSupported)
+            {
+                log<level::ERR>("Cannot perform ERoT self reset: The action is not supported by the current ERoT version");
+                return ipmi::response(ipmi::ccCommandNotAvailable);
+            }
+
+            errorCode = executeCmd(erotResetPath.c_str());
+            return ipmi::responseSuccess();
+        }
+        catch (sdbusplus::exception_t& e)
+        {
+            log<level::ERR>("Failed to run ERoT self reset command",
+                phosphor::logging::entry("EXCEPTION=%s", e.what()));
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+
  } // namespace ipmi
 
 
@@ -2216,6 +2261,12 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::CmdPowerCapAllocatedWattsSet,
                           ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapAllocatedWattsSet);
+
+    // <ERoT Reset>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::CmdERoTReset,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiCmdERoTReset);
 
     return;
 }
