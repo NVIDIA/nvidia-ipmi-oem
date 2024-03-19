@@ -58,6 +58,7 @@ constexpr auto cmdPowerCapMinGet                = 0xCA;
 constexpr auto cmdPowerCapMinSet                = 0xCB;
 constexpr auto CmdPowerCapAllocatedWattsGet     = 0xCE;
 constexpr auto CmdPowerCapAllocatedWattsSet     = 0xCF;
+constexpr auto CmdERoTReset                     = 0xD2;
 
 
 } // namespace app
