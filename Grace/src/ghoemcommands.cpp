@@ -610,63 +610,69 @@ ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)
     return ipmi::response(ipmi::ccInvalidFieldRequest);
 }
 
+/**
+ * @brief send control command to the system manager
+ *
+ * This function is to send control command to the systemd manager
+ *
+ * @param[in] dbus - Dbus obj
+ * @param[in] service - service name
+ * @param[in] action - action to the service
+ *
+ **/
+void controlSystemUnit(std::shared_ptr<sdbusplus::asio::connection>& dbus,
+                      const std::string& service, const std::string& action)
+{
+    auto method = dbus->new_method_call(systemBusName, systemPath,
+                                            systemIntf, action.c_str());
+    method.append(service.c_str());
+    method.append("replace");
+    dbus->async_send(method, [service, action](boost::system::error_code ec,
+                                               sdbusplus::message_t& m) {
+        if (ec || m.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                ("Failed to do " + action + " on " + service + ": " +
+                 ec.message()).c_str());
+            return;
+        }
+    });
+}
+
 ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
 {
-
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
     auto pldmService = ipmi::getService(*dbus, pldmPollingIntf, pldmPollingObj);
 
-    if (mode == 0x00)
+    if (mode == static_cast<uint8_t>(ipmi::nvidia::misc::Mode::Stop))
     {
-        /* stop services that scan sensors */
-        std::string stopSensorScan = "systemctl stop ";
-        stopSensorScan += nvidia::sensorScanSerivcesList;
-        auto r = system(stopSensorScan.c_str());
-        
         /* Stop polling PLDM sensors */
         ipmi::setDbusProperty(*dbus, pldmService, pldmPollingObj,
-                                            pldmPollingIntf, "Enabled",bool(false));
-   
-
-        
-        if (r != 0)
+                                            pldmPollingIntf, "Enabled", bool(false));
+        // Stop all services in the list
+        for (auto service : ipmi::nvidia::sensorMonitorServiceList)
         {
-            /* log that the stop failed */
-            phosphor::logging::log<level::ERR>(
-                "ipmiSensorScanEnableDisable: failed to stop services");
-            return ipmi::responseResponseError();
+            controlSystemUnit(dbus, service, "StopUnit");
         }
-        
-        return ipmi::responseSuccess();
     }
-
-    else if (mode == 0x01)
+    else if (mode == static_cast<uint8_t>(ipmi::nvidia::misc::Mode::Start))
     {
-        /* start services */
-        std::string startSensorScan = "systemctl start ";
-        startSensorScan += nvidia::sensorScanSerivcesList;
-        auto r = system(startSensorScan.c_str());
-
         /* Start polling PLDM sensors */
         ipmi::setDbusProperty(*dbus, pldmService, pldmPollingObj,
-                                            pldmPollingIntf, "Enabled",bool(true));
-
-        
-        if (r != 0)
+                                            pldmPollingIntf, "Enabled", bool(true));
+        // Start all services in the list
+        for (auto service : ipmi::nvidia::sensorMonitorServiceList)
         {
-            /* log that the start failed */
-            phosphor::logging::log<level::ERR>(
-                "ipmiSensorScanEnableDisable: failed to start services");
-            return ipmi::responseResponseError();
+            controlSystemUnit(dbus, service, "StartUnit");
         }
-
-        
-        return ipmi::responseSuccess();
     }
-
-
-
-    return ipmi::response(ipmi::ccInvalidFieldRequest);
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            ("Invalid parameter: " + std::to_string(mode)).c_str());
+        return ipmi::response(ipmi::ccInvalidFieldRequest);
+    }
+    return ipmi::responseSuccess();
 }
 
 static uint8_t getSSDLedRegister(uint8_t type, uint8_t instance,

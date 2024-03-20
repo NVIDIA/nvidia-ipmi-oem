@@ -88,6 +88,13 @@ constexpr auto cmdGetWpStatus = 0x8A;
 constexpr auto cmdSetWpStatus = 0x8B;
 constexpr auto getWPType = 0x00;
 
+// Parameter of Set Sensor Monitro Control Command (85h)
+enum class Mode : uint8_t
+{
+    Stop,
+    Start
+};
+
 } // namespace misc
 namespace chassis
 {

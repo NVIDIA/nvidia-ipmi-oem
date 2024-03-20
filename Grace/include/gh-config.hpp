@@ -18,9 +18,15 @@
 
 #include <unistd.h>
 #include <string>
+#include <vector>
 
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
+
+// system manager dbus object for Start/Stop system unit
+static constexpr auto systemBusName = "org.freedesktop.systemd1";
+static constexpr auto systemPath = "/org/freedesktop/systemd1";
+static constexpr auto systemIntf = "org.freedesktop.systemd1.Manager";
 
 namespace ipmi
 {
@@ -41,14 +47,16 @@ constexpr auto fanZoneCtrlName1             = "max31790_1";
 constexpr auto fanZoneCtrlName2             = "max31790_2";
 #endif
 
-constexpr auto sensorScanSerivcesList       = "xyz.openbmc_project.exitairsensor "
-                                              "xyz.openbmc_project.externalsensor "
-                                              "xyz.openbmc_project.hwmontempsensor "
-                                              "xyz.openbmc_project.mcutempsensor "
-                                              "xyz.openbmc_project.psusensor "
-                                              "nvidia-gpu-manager "
-                                              "xyz.openbmc_project.fansensor "
-					      "xyz.openbmc_project.nvmesensor";
+std::vector<std::string> sensorMonitorServiceList = {
+   "nvidia-gpu-manager.service",
+   "xyz.openbmc_project.exitairsensor.service",
+   "xyz.openbmc_project.externalsensor.service",
+   "xyz.openbmc_project.hwmontempsensor.service",
+   "xyz.openbmc_project.mcutempsensor.service",
+   "xyz.openbmc_project.psusensor.service",
+   "xyz.openbmc_project.fansensor.service",
+   "xyz.openbmc_project.nvmesensor.service"
+};
 
 constexpr auto fpgaMidSSDLedReadyMove   = 0x0e;
 constexpr auto fpgaMidSSDLedActivity    = 0x0c;
