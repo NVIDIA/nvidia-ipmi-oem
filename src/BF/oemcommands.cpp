@@ -177,6 +177,7 @@ namespace ipmi
          {{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd', 'U', 'e', 'f', 'i', '1'}, {}}}
     };
 
+    std::atomic_flag atomicFlag = ATOMIC_FLAG_INIT;
     static int BootStrapCurrentUserIndex = 0;
     static std::string accountService;
 
@@ -1034,7 +1035,7 @@ static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
                               biosConfigMgrIface, "CredentialBootstrap",
                               bool(true));
         phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "setCredentialBootStrap: Disable CredentialBootstrapping"
             "property set to true");
     }
     else
@@ -1043,7 +1044,7 @@ static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
                               biosConfigMgrIface, "CredentialBootstrap",
                               bool(false));
         phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "setCredentialBootStrap: Disable CredentialBootstrapping"
             "property set to false");
     }
 }
@@ -1299,6 +1300,7 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
                                                     uint8_t index)
 {
     int accountIndex = static_cast<int>(index);
+    phosphor::logging::log<phosphor::logging::level::INFO>("ipmiCreateBootStrapAccountBF start");
     try
     {
         if (accountIndex > BOOTSTRAP_ACCOUNTS_NUM)
@@ -1315,7 +1317,6 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
             phosphor::logging::log<level::ERR>(
                 "ipmiCreateBootStrapAccountBF: Credential BootStrapping Disabled "
                 "Get BootStrap Account command rejected.");
-
             return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
         }
 
@@ -1367,6 +1368,10 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
             ipmi::userDatabaseBuff[accountIndex].respPasswordBuf.clear();
             std::copy(password.begin(), password.end(),
                       std::back_inserter(ipmi::userDatabaseBuff[accountIndex].respPasswordBuf));
+            /* release atomic flag */
+            atomicFlag.clear(std::memory_order_release);
+            phosphor::logging::log<level::INFO>("ipmiCreateBootStrapAccountBF:  unlocked account.");
+            phosphor::logging::log<phosphor::logging::level::INFO>("ipmiCreateBootStrapAccountBF end");
             return ipmi::responseSuccess();
         }
     }
@@ -1379,9 +1384,55 @@ static ipmi::RspType<> ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
     }
 }
 
+
+/**
+ * @brief Acquires an atomic lock.
+ *
+ * This function attempts to acquire an atomic lock using a spin lock mechanism.
+ * If the lock is already held -1 is returned to indicate failure.
+ * If the lock is successfully acquired, 0 is returned to indicate success.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+
+static int atomicLock()
+ {
+    if (atomicFlag.test_and_set(std::memory_order_acquire))
+    {
+        phosphor::logging::log<level::INFO>("atomicLock:already locked.");
+        return -1;
+    };
+
+    phosphor::logging::log<level::INFO>("atomicLock:locked taken.");
+    return 0;
+ }
+
 static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx, uint8_t disableCredBootStrap)
     {
+        phosphor::logging::log<phosphor::logging::level::INFO>("ipmiGetBootStrapAccountBF start");
+
+        if (atomicLock() < 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                    "ipmiGetBootStrapAccountBF: atomic flag is set");
+
+            /* Returns the previous account. Processing is not complete yet. */
+            int prevUserIndex = ipmi::BootStrapCurrentUserIndex == 1 ? 0 : 1;
+
+            size_t passwordSize = ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf.size();
+
+            if (passwordSize != BOOTSTRAP_PASSWORD_SIZE) {
+                    phosphor::logging::log<phosphor::logging::level::ERR>(
+                                    "ipmiGetBootStrapAccountBF : Invalid password size.",
+                                    phosphor::logging::entry("SIZE= %zu", passwordSize));
+                    return ipmi::responseResponseError();
+            }
+
+            auto ret = ipmi::responseSuccess(ipmi::userDatabaseBuff[prevUserIndex].respUserNameBuf,
+                                             ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf);
+            return ret;
+        }
         //Remove the following account, and the bootstrap manager will recreate it.
         size_t passwordSize = ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respPasswordBuf.size();
 
@@ -1411,6 +1462,7 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                 .append("/")
                 .append(ipmi::getBootstrapUserName(ipmi::BootStrapCurrentUserIndex)),
             usersDeleteIface, "Delete");
+        phosphor::logging::log<phosphor::logging::level::INFO>("ipmiGetBootStrapAccountBF end");
         return ret;
     }
 
