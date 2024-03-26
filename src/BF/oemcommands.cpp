@@ -1917,7 +1917,21 @@ static ipmi::RspType<> ipmicmdPowerCapGenericSet(
                 return ipmi::response(ipmi::ccCommandNotAvailable);
             }
 
-            errorCode = executeCmd(erotResetPath.c_str());
+            /* An asynchronous call to the ERoT reset script */
+            pid_t pid = fork();
+            if (pid == 0) /* child process */
+            {
+                execl(erotResetPath.c_str(), erotResetPath.c_str(), (char*) NULL);
+                /* execl only returns on fail */
+                log<level::ERR>("Failed to run ERoT self reset");
+                return ipmi::responseUnspecifiedError();
+            }
+            else if (pid < 0)
+            {
+                log<level::ERR>("Failed to start ERoT self reset process");
+                return ipmi::responseUnspecifiedError();
+            }
+            /* parent process */
             return ipmi::responseSuccess();
         }
         catch (sdbusplus::exception_t& e)
