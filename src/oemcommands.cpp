@@ -564,7 +564,7 @@ ipmi::RspType<uint8_t,                 // NTP Status
         tie(ret, ntpServers) = dbusctlSetGetProperty(networkServiceStr,
                                                    networkNTPObj,
                                                    networkNTPIntf,
-                                                   "NTPServers",
+                                                   "StaticNTPServers",
                                                    false
                                                    );
         // Check return code
@@ -662,7 +662,7 @@ ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>&
             tie(ret, ntpServers) = dbusctlSetGetProperty(networkServiceStr,
                                                        networkNTPObj,
                                                        networkNTPIntf,
-                                                       "NTPServers",
+                                                       "StaticNTPServers",
                                                        false);
             // Check return code
             if (ret)
@@ -722,7 +722,7 @@ ipmi::RspType<uint8_t> ipmiSetNTPConfig(uint8_t ntpOption, std::vector<uint8_t>&
             tie(ret, ntpServersSet) = dbusctlSetGetProperty(networkServiceStr,
                                                        networkNTPObj,
                                                        networkNTPIntf,
-                                                       "NTPServers",
+                                                       "StaticNTPServers",
                                                        true,
                                                        args );
             // Check return code
