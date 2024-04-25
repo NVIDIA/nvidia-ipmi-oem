@@ -45,6 +45,9 @@ option (custom-pwm-fan
         "To support customize platforms pwm/fan configurations"
         OFF)
 
+option (custom-oem-cmd
+        "To support commands/configuration relevant for new platforms"
+        OFF)
 option (bf3-chassis-commands
         "To support commands relevant only to BF3"
         OFF)
@@ -142,6 +145,10 @@ if(custom-pwm-fan)
     add_compile_definitions(CONFIG_PWM=${config-pwm})
     add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME1=${config-fanZoneCtrlName1})
     add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME2=${config-fanZoneCtrlName2})
+endif()
+
+if(custom-oem-cmd)
+	add_compile_definitions(CUSTOM_OEM_CMD=${custom-oem-cmd})
 endif()
 
 if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)

@@ -52,7 +52,9 @@ constexpr auto fanZoneCtrlName2             = "max31790_2";
 #endif
 
 std::vector<std::string> sensorMonitorServiceList = {
+#ifndef CUSTOM_OEM_CMD
    "nvidia-gpu-manager.service",
+#endif
    "xyz.openbmc_project.exitairsensor.service",
    "xyz.openbmc_project.externalsensor.service",
    "xyz.openbmc_project.hwmontempsensor.service",
