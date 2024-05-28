@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
-
-
 
 /*
 // Copyright (c) 2017 2018 Intel Corporation
@@ -146,10 +142,10 @@ static sdbusplus::bus::match::match thresholdChanged(
             values;
         m.read(std::string(), values);
 
-        auto findAssert =
-            std::find_if(values.begin(), values.end(), [](const auto& pair) {
-                return pair.first.find("Alarm") != std::string::npos;
-            });
+        auto findAssert = std::find_if(values.begin(), values.end(),
+                                       [](const auto& pair) {
+            return pair.first.find("Alarm") != std::string::npos;
+        });
         if (findAssert != values.end())
         {
             auto ptr = std::get_if<bool>(&(findAssert->second));
@@ -198,12 +194,14 @@ static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
         auto maxMap = sensorObject->second.find("MaxValue");
         auto minMap = sensorObject->second.find("MinValue");
 
-        if ((maxMap != sensorObject->second.end()) && (std::isfinite(
+        if ((maxMap != sensorObject->second.end()) &&
+            (std::isfinite(
                 std::visit(VariantToDoubleVisitor(), maxMap->second))))
         {
             max = std::visit(VariantToDoubleVisitor(), maxMap->second);
         }
-        if ((minMap != sensorObject->second.end()) && (std::isfinite(
+        if ((minMap != sensorObject->second.end()) &&
+            (std::isfinite(
                 std::visit(VariantToDoubleVisitor(), minMap->second))))
         {
             min = std::visit(VariantToDoubleVisitor(), minMap->second);
@@ -230,7 +228,6 @@ static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
     }
     if (warning != sensorMap.end())
     {
-
         auto lower = warning->second.find("WarningLow");
         auto upper = warning->second.find("WarningHigh");
         if ((lower != warning->second.end()) &&
@@ -390,9 +387,9 @@ static void setMeStatus(uint8_t eventData2, uint8_t eventData3, bool disable)
     }
 
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-    auto setHealth =
-        dbus->new_method_call(meHealth::busname, meHealth::path,
-                              meHealth::interface, meHealth::method);
+    auto setHealth = dbus->new_method_call(meHealth::busname, meHealth::path,
+                                           meHealth::interface,
+                                           meHealth::method);
     setHealth.append(std::to_string(static_cast<size_t>(eventData2)), state);
     try
     {
@@ -496,8 +493,8 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, std::optional<uint8_t>>
         return ipmi::responseResponseError();
     }
 
-    uint8_t value =
-        scaleIPMIValueFromDouble(reading, mValue, rExp, bValue, bExp, bSigned);
+    uint8_t value = scaleIPMIValueFromDouble(reading, mValue, rExp, bValue,
+                                             bExp, bSigned);
     uint8_t operation =
         static_cast<uint8_t>(IPMISensorReadingByte2::sensorScanningEnable);
     operation |=
@@ -781,16 +778,15 @@ IPMIThresholds getIPMIThresholds(const SensorMap& sensorMap)
 
             if (warningHigh != warningMap.end())
             {
-
-                double value =
-                    std::visit(VariantToDoubleVisitor(), warningHigh->second);
+                double value = std::visit(VariantToDoubleVisitor(),
+                                          warningHigh->second);
                 resp.warningHigh = scaleIPMIValueFromDouble(
                     value, mValue, rExp, bValue, bExp, bSigned);
             }
             if (warningLow != warningMap.end())
             {
-                double value =
-                    std::visit(VariantToDoubleVisitor(), warningLow->second);
+                double value = std::visit(VariantToDoubleVisitor(),
+                                          warningLow->second);
                 resp.warningLow = scaleIPMIValueFromDouble(
                     value, mValue, rExp, bValue, bExp, bSigned);
             }
@@ -804,15 +800,15 @@ IPMIThresholds getIPMIThresholds(const SensorMap& sensorMap)
 
             if (criticalHigh != criticalMap.end())
             {
-                double value =
-                    std::visit(VariantToDoubleVisitor(), criticalHigh->second);
+                double value = std::visit(VariantToDoubleVisitor(),
+                                          criticalHigh->second);
                 resp.criticalHigh = scaleIPMIValueFromDouble(
                     value, mValue, rExp, bValue, bExp, bSigned);
             }
             if (criticalLow != criticalMap.end())
             {
-                double value =
-                    std::visit(VariantToDoubleVisitor(), criticalLow->second);
+                double value = std::visit(VariantToDoubleVisitor(),
+                                          criticalLow->second);
                 resp.criticalLow = scaleIPMIValueFromDouble(
                     value, mValue, rExp, bValue, bExp, bSigned);
             }
@@ -1141,7 +1137,6 @@ ipmi::RspType<uint8_t,         // sensorEventStatus
 
 static int getSensorDataRecords(ipmi::Context::ptr ctx)
 {
-
     size_t recordID = 0;
     size_t fruCount = 0;
 
@@ -1163,7 +1158,6 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
     std::string path;
     for (const auto& sensor : sensorTree)
     {
-
         connection = sensor.second.begin()->first;
         path = sensor.first;
 
@@ -1277,8 +1271,8 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         uint8_t bExpBits = bExp & 0x07;
 
         // move rExp and bExp into place
-        record.body.r_b_exponents =
-            (rExpSign << 7) | (rExpBits << 4) | (bExpSign << 3) | bExpBits;
+        record.body.r_b_exponents = (rExpSign << 7) | (rExpBits << 4) |
+                                    (bExpSign << 3) | bExpBits;
 
         // Set the analog reading byte interpretation accordingly
         record.body.sensor_units_1 = (bSigned ? 1 : 0) << 7;
@@ -1495,8 +1489,8 @@ static ipmi::RspType<uint8_t, // respcount
         // Return the number of sensors attached to the LUN
         if ((ctx->lun == 0) && (numSensors > 0))
         {
-            sdrCount =
-                (numSensors > maxSensorsPerLUN) ? maxSensorsPerLUN : numSensors;
+            sdrCount = (numSensors > maxSensorsPerLUN) ? maxSensorsPerLUN
+                                                       : numSensors;
         }
         else if ((ctx->lun == 1) && (numSensors > maxSensorsPerLUN))
         {
@@ -1508,8 +1502,8 @@ static ipmi::RspType<uint8_t, // respcount
         {
             if (numSensors <= maxIPMISensors)
             {
-                sdrCount =
-                    (numSensors - (2 * maxSensorsPerLUN)) & maxSensorsPerLUN;
+                sdrCount = (numSensors - (2 * maxSensorsPerLUN)) &
+                           maxSensorsPerLUN;
             }
             else
             {
@@ -1573,8 +1567,8 @@ ipmi::RspType<uint8_t,  // sdr version
         return ipmi::response(ret);
     }
 
-    uint16_t recordCount =
-        sensorTree.size() + fruCount + ipmi::storage::type12Count;
+    uint16_t recordCount = sensorTree.size() + fruCount +
+                           ipmi::storage::type12Count;
 
     uint8_t operationSupport = static_cast<uint8_t>(
         SdrRepositoryInfoOps::overflow); // write not supported
@@ -1684,8 +1678,8 @@ ipmi::RspType<uint16_t,            // next record ID
         return ipmi::responseSuccess(nextRecordId, emptyData);
     }
 
-    size_t sdrLength =
-        sizeof(get_sdr::SensorDataRecordHeader) + hdr->record_length;
+    size_t sdrLength = sizeof(get_sdr::SensorDataRecordHeader) +
+                       hdr->record_length;
     if (sdrLength < (offset + bytesToRead))
     {
         bytesToRead = sdrLength - offset;
@@ -1778,6 +1772,5 @@ void registerSensorFunctions()
                           ipmi::storage::cmdGetSdr, ipmi::Privilege::User,
                           ipmiStorageGetSDR);
 #endif
-
 }
 } // namespace ipmi

@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
-
-
 
 /*
 // Copyright (c) 2017-2019 Intel Corporation
@@ -51,11 +47,11 @@
 #include <sdbusplus/timer.hpp>
 
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
-#include <fstream>
 
 #define STRINGIFY(x) #x
 #define STR(x) STRINGIFY(x)
@@ -84,10 +80,10 @@ constexpr static const char* entityManagerServiceName =
     "xyz.openbmc_project.EntityManager";
 // SEL ipmi event add in dbus
 
-
-static constexpr char const *ipmiSELObj = "xyz.openbmc_project.Logging.IPMI";
-static constexpr char const *ipmiSELPath = "/xyz/openbmc_project/Logging/IPMI";
-static constexpr char const *ipmiSELAddInterface = "xyz.openbmc_project.Logging.IPMI";
+static constexpr const char* ipmiSELObj = "xyz.openbmc_project.Logging.IPMI";
+static constexpr const char* ipmiSELPath = "/xyz/openbmc_project/Logging/IPMI";
+static constexpr const char* ipmiSELAddInterface =
+    "xyz.openbmc_project.Logging.IPMI";
 static constexpr uint16_t selBMCGenID = 0x0020;
 constexpr static const size_t writeTimeoutSeconds = 10;
 constexpr static const char* chassisTypeRackMount = "23";
@@ -133,7 +129,7 @@ bool writeFru(const std::vector<uint8_t>& fru)
     catch (sdbusplus::exception_t&)
     {
         // todo: log sel?
-	fruCacheTemp.clear();
+        fruCacheTemp.clear();
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "error writing fru");
         return false;
@@ -157,7 +153,6 @@ void createTimers()
 
 void recalculateHashes()
 {
-
     deviceHashes.clear();
     // hash the object paths to create unique device id's. increment on
     // collision
@@ -290,12 +285,15 @@ void writeFruIfRunning()
     writeFru(fruCache);
 }
 
-static int CheckGWPfru(std::string gpiochip, uint32_t gpio) {
-
+static int CheckGWPfru(std::string gpiochip, uint32_t gpio)
+{
     int base;
-    std::ifstream chipbase("/sys/class/gpio/" + gpiochip + "/base", std::ifstream::in);
-    if (!chipbase.is_open()) {
-        phosphor::logging::log<phosphor::logging::level::ERR>("Failed to open gpiochip base!");
+    std::ifstream chipbase("/sys/class/gpio/" + gpiochip + "/base",
+                           std::ifstream::in);
+    if (!chipbase.is_open())
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to open gpiochip base!");
         return -1;
     }
 
@@ -304,11 +302,13 @@ static int CheckGWPfru(std::string gpiochip, uint32_t gpio) {
 
     gpio += base;
 
-    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio))) {
+    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio)))
+    {
         std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
-        if (!exportOf.is_open()) {
+        if (!exportOf.is_open())
+        {
             phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio export!");
+                "Failed to open gpio export!");
             return -2;
         }
         exportOf << gpio;
@@ -318,19 +318,21 @@ static int CheckGWPfru(std::string gpiochip, uint32_t gpio) {
 }
 
 //
-//Extraction of gpiochip numeric valuesgpiochip : This function simply separates the 
-//numeric and other parts of the string and returns the numeric value(res) to be used in 
-//other GPIO operations, such as exporting, setting values, and reading values etc.
+// Extraction of gpiochip numeric valuesgpiochip : This function simply
+// separates the numeric and other parts of the string and returns the numeric
+// value(res) to be used in other GPIO operations, such as exporting, setting
+// values, and reading values etc.
 //
 
-static constexpr int extractNumericValue(const char* str) {
-    int res= 0;
-    for (int i = 8; str[i] != '\0'; ++i) {
+static constexpr int extractNumericValue(const char* str)
+{
+    int res = 0;
+    for (int i = 8; str[i] != '\0'; ++i)
+    {
         res = res * 10 + (str[i] - '0');
     }
     return res;
 }
-
 
 void startMatch(void)
 {
@@ -346,61 +348,63 @@ void startMatch(void)
                             "type='signal',arg0path='/xyz/openbmc_project/"
                             "FruDevice/',member='InterfacesAdded'",
                             [](sdbusplus::message::message& message) {
-                                sdbusplus::message::object_path path;
-                                ObjectType object;
-                                try
-                                {
-                                    message.read(path, object);
-                                }
-                                catch (sdbusplus::exception_t&)
-                                {
-                                    return;
-                                }
-                                auto findType = object.find(
-                                    "xyz.openbmc_project.FruDevice");
-                                if (findType == object.end())
-                                {
-                                    return;
-                                }
-				boost::asio::spawn(*getIoContext(), [](boost::asio::yield_context yield) {
-				replaceCacheFru(getSdBus(), yield);});
-                                writeFruIfRunning();
-                                frus[path] = object;
-                                recalculateHashes();
-                                // Invalidate SDRs
-                                sensorDataRecords.clear();
-                                lastDevId = 0xFF;
-                            });
+        sdbusplus::message::object_path path;
+        ObjectType object;
+        try
+        {
+            message.read(path, object);
+        }
+        catch (sdbusplus::exception_t&)
+        {
+            return;
+        }
+        auto findType = object.find("xyz.openbmc_project.FruDevice");
+        if (findType == object.end())
+        {
+            return;
+        }
+        boost::asio::spawn(*getIoContext(),
+                           [](boost::asio::yield_context yield) {
+            replaceCacheFru(getSdBus(), yield);
+        });
+        writeFruIfRunning();
+        frus[path] = object;
+        recalculateHashes();
+        // Invalidate SDRs
+        sensorDataRecords.clear();
+        lastDevId = 0xFF;
+    });
 
     fruMatches.emplace_back(*bus,
                             "type='signal',arg0path='/xyz/openbmc_project/"
                             "FruDevice/',member='InterfacesRemoved'",
                             [](sdbusplus::message::message& message) {
-                                sdbusplus::message::object_path path;
-                                std::set<std::string> interfaces;
-                                try
-                                {
-                                    message.read(path, interfaces);
-                                }
-                                catch (sdbusplus::exception_t&)
-                                {
-                                    return;
-                                }
-                                auto findType = interfaces.find(
-                                    "xyz.openbmc_project.FruDevice");
-                                if (findType == interfaces.end())
-                                {
-                                    return;
-                                }
-				boost::asio::spawn(*getIoContext(), [](boost::asio::yield_context yield) {
-			        replaceCacheFru(getSdBus(), yield);});
-                                writeFruIfRunning();
-                                frus.erase(path);
-                                recalculateHashes();
-                                // Invalidate SDRs
-                                sensorDataRecords.clear();
-                                lastDevId = 0xFF;
-                            });
+        sdbusplus::message::object_path path;
+        std::set<std::string> interfaces;
+        try
+        {
+            message.read(path, interfaces);
+        }
+        catch (sdbusplus::exception_t&)
+        {
+            return;
+        }
+        auto findType = interfaces.find("xyz.openbmc_project.FruDevice");
+        if (findType == interfaces.end())
+        {
+            return;
+        }
+        boost::asio::spawn(*getIoContext(),
+                           [](boost::asio::yield_context yield) {
+            replaceCacheFru(getSdBus(), yield);
+        });
+        writeFruIfRunning();
+        frus.erase(path);
+        recalculateHashes();
+        // Invalidate SDRs
+        sensorDataRecords.clear();
+        lastDevId = 0xFF;
+    });
 }
 
 /** @brief implements the read FRU data command
@@ -453,7 +457,6 @@ ipmi::RspType<uint8_t,             // Count
                                  requestedData);
 }
 
-
 /** @brief implements the write FRU data command
  *  @param fruDeviceId        - FRU Device ID
  *  @param fruInventoryOffset - FRU Inventory Offset to write
@@ -472,47 +475,48 @@ ipmi::RspType<uint8_t>
         return ipmi::responseInvalidFieldRequest();
     }
 
-
-// To use this option, you need to pass the WP GPIO pin and GPIO chip from 
-// the meta layer, which is 100% optional.
-// eg: 
-// WP_GPIO="70"
-// WP-GPIO-CHIP="gpiochip816"
-// EXTRA_OECMAKE += "-DWP-GPIO=${WP_GPIO}"
-// EXTRA_OECMAKE += "-DWP-GPIO-CHIP=${WP-GPIO-CHIP}"
+    // To use this option, you need to pass the WP GPIO pin and GPIO chip from
+    // the meta layer, which is 100% optional.
+    // eg:
+    // WP_GPIO="70"
+    // WP-GPIO-CHIP="gpiochip816"
+    // EXTRA_OECMAKE += "-DWP-GPIO=${WP_GPIO}"
+    // EXTRA_OECMAKE += "-DWP-GPIO-CHIP=${WP-GPIO-CHIP}"
 
 #ifdef WP_GPIO
 
-        static constexpr auto GWPGpoId = WP_GPIO ;
-        static constexpr char const *GPIO_chip = STR(CHIP);
-   
-	int fruWP = CheckGWPfru(GPIO_chip,GWPGpoId);
-	if (fruWP < 0) 
-	{
-        	phosphor::logging::log<phosphor::logging::level::ERR>(
-            	"GWPfru : Failed to export GPIO or Wrong GPIO");
-        	return ipmi::responseUnspecifiedError();
-    	}
+    static constexpr auto GWPGpoId = WP_GPIO;
+    static constexpr const char* GPIO_chip = STR(CHIP);
 
-	int gpiochip_no = extractNumericValue(GPIO_chip);
-        gpiochip_no += WP_GPIO;
-	std::string res = "gpio" + std::to_string(gpiochip_no);
+    int fruWP = CheckGWPfru(GPIO_chip, GWPGpoId);
+    if (fruWP < 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "GWPfru : Failed to export GPIO or Wrong GPIO");
+        return ipmi::responseUnspecifiedError();
+    }
 
-        std::ifstream valueIf("/sys/class/gpio/"+res+"/value", std::ifstream::in);
-        if (!valueIf.is_open()) {
-        	phosphor::logging::log<phosphor::logging::level::ERR>(
-            	"GWPfru : Failed to open gpio value!");
-        	return ipmi::responseUnspecifiedError();
+    int gpiochip_no = extractNumericValue(GPIO_chip);
+    gpiochip_no += WP_GPIO;
+    std::string res = "gpio" + std::to_string(gpiochip_no);
+
+    std::ifstream valueIf("/sys/class/gpio/" + res + "/value",
+                          std::ifstream::in);
+    if (!valueIf.is_open())
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "GWPfru : Failed to open gpio value!");
+        return ipmi::responseUnspecifiedError();
     }
     int r;
     valueIf >> r;
     valueIf.close();
-    //if fru is write protected
-    if(r)
+    // if fru is write protected
+    if (r)
     {
-    	phosphor::logging::log<phosphor::logging::level::ERR>(
-                "GWPfru : Operation is not possble FRU is Write protected"); 
-    	return ipmi::responseCommandDisabled();
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "GWPfru : Operation is not possble FRU is Write protected");
+        return ipmi::responseCommandDisabled();
     }
 
 #endif
@@ -525,7 +529,7 @@ ipmi::RspType<uint8_t>
         return ipmi::response(status);
     }
 
-    //ensuring that fruCacheTemp is not empty and carry fruCache.
+    // ensuring that fruCacheTemp is not empty and carry fruCache.
     if (fruCacheTemp.empty())
     {
         fruCacheTemp = fruCache;
@@ -661,39 +665,36 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
     uint8_t& address = device->second.second;
 
     boost::container::flat_map<std::string, DbusVariant>* fruData = nullptr;
-    auto fru =
-        std::find_if(frus.begin(), frus.end(),
-                     [bus, address, &fruData](ManagedEntry& entry) {
-                         auto findFruDevice =
-                             entry.second.find("xyz.openbmc_project.FruDevice");
-                         if (findFruDevice == entry.second.end())
-                         {
-                             return false;
-                         }
-                         fruData = &(findFruDevice->second);
-                         auto findBus = findFruDevice->second.find("BUS");
-                         auto findAddress =
-                             findFruDevice->second.find("ADDRESS");
-                         if (findBus == findFruDevice->second.end() ||
-                             findAddress == findFruDevice->second.end())
-                         {
-                             return false;
-                         }
-                         if (std::get<uint32_t>(findBus->second) != bus)
-                         {
-                             return false;
-                         }
-                         if (std::get<uint32_t>(findAddress->second) != address)
-                         {
-                             return false;
-                         }
-                         return true;
-                     });
+    auto fru = std::find_if(frus.begin(), frus.end(),
+                            [bus, address, &fruData](ManagedEntry& entry) {
+        auto findFruDevice = entry.second.find("xyz.openbmc_project.FruDevice");
+        if (findFruDevice == entry.second.end())
+        {
+            return false;
+        }
+        fruData = &(findFruDevice->second);
+        auto findBus = findFruDevice->second.find("BUS");
+        auto findAddress = findFruDevice->second.find("ADDRESS");
+        if (findBus == findFruDevice->second.end() ||
+            findAddress == findFruDevice->second.end())
+        {
+            return false;
+        }
+        if (std::get<uint32_t>(findBus->second) != bus)
+        {
+            return false;
+        }
+        if (std::get<uint32_t>(findAddress->second) != address)
+        {
+            return false;
+        }
+        return true;
+    });
     if (fru == frus.end())
     {
         return IPMI_CC_RESPONSE_ERROR;
     }
-    
+
     std::string name;
 
 #ifdef USING_ENTITY_MANAGER_DECORATORS
@@ -716,49 +717,49 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
         return ipmi::ccResponseError;
     }
 
-    auto entity = std::find_if(
-        entities.begin(), entities.end(),
-        [bus, address, &entityData, &name](ManagedEntry& entry) {
-            auto findFruDevice = entry.second.find(
-                "xyz.openbmc_project.Inventory.Decorator.FruDevice");
-            if (findFruDevice == entry.second.end())
-            {
-                return false;
-            }
+    auto entity =
+        std::find_if(entities.begin(), entities.end(),
+                     [bus, address, &entityData, &name](ManagedEntry& entry) {
+        auto findFruDevice = entry.second.find(
+            "xyz.openbmc_project.Inventory.Decorator.FruDevice");
+        if (findFruDevice == entry.second.end())
+        {
+            return false;
+        }
 
-            // Integer fields added via Entity-Manager json are uint64_ts by
-            // default.
-            auto findBus = findFruDevice->second.find("Bus");
-            auto findAddress = findFruDevice->second.find("Address");
+        // Integer fields added via Entity-Manager json are uint64_ts by
+        // default.
+        auto findBus = findFruDevice->second.find("Bus");
+        auto findAddress = findFruDevice->second.find("Address");
 
-            if (findBus == findFruDevice->second.end() ||
-                findAddress == findFruDevice->second.end())
-            {
-                return false;
-            }
-            if ((std::get<uint64_t>(findBus->second) != bus) ||
-                (std::get<uint64_t>(findAddress->second) != address))
-            {
-                return false;
-            }
+        if (findBus == findFruDevice->second.end() ||
+            findAddress == findFruDevice->second.end())
+        {
+            return false;
+        }
+        if ((std::get<uint64_t>(findBus->second) != bus) ||
+            (std::get<uint64_t>(findAddress->second) != address))
+        {
+            return false;
+        }
 
-            auto fruName = findFruDevice->second.find("Name");
-            if (fruName != findFruDevice->second.end())
-            {
-                name = std::get<std::string>(fruName->second);
-            }
+        auto fruName = findFruDevice->second.find("Name");
+        if (fruName != findFruDevice->second.end())
+        {
+            name = std::get<std::string>(fruName->second);
+        }
 
-            // At this point we found the device entry and should return
-            // true.
-            auto findIpmiDevice = entry.second.find(
-                "xyz.openbmc_project.Inventory.Decorator.Ipmi");
-            if (findIpmiDevice != entry.second.end())
-            {
-                entityData = &(findIpmiDevice->second);
-            }
+        // At this point we found the device entry and should return
+        // true.
+        auto findIpmiDevice =
+            entry.second.find("xyz.openbmc_project.Inventory.Decorator.Ipmi");
+        if (findIpmiDevice != entry.second.end())
+        {
+            entityData = &(findIpmiDevice->second);
+        }
 
-            return true;
-        });
+        return true;
+    });
 
     if (entity == entities.end())
     {
@@ -936,7 +937,6 @@ void registerStorageFunctions()
     createTimers();
     startMatch();
 
-
     // <Get FRU Inventory Area Info>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::netFnStorage,
                           ipmi::storage::cmdGetFruInventoryAreaInfo,
@@ -953,4 +953,3 @@ void registerStorageFunctions()
 }
 } // namespace storage
 } // namespace ipmi
-

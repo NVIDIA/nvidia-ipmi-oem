@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,11 @@
  * limitations under the License.
  */
 
-
-
-
-
-
-
-#include "oemcommandsBF.hpp"
 #include "oemcommands.hpp"
+
 #include "biosversionutils.hpp"
 #include "dgx-a100-config.hpp"
+#include "oemcommandsBF.hpp"
 
 #include <bits/stdc++.h>
 #include <fcntl.h>
@@ -54,17 +49,13 @@
 #include <tuple>
 #include <vector>
 
-
-
-
 void registerNvOemPlatformFunctionsBF2() __attribute__((constructor(103)));
-
 
 using namespace phosphor::logging;
 
 using GetSubTreeType = std::vector<
     std::pair<std::string,
-        std::vector<std::pair<std::string, std::vector<std::string>>>>>;
+              std::vector<std::pair<std::string, std::vector<std::string>>>>>;
 using GetSubTreePathsType = std::vector<std::string>;
 using BasicVariantType = std::variant<std::string>;
 using PropertyMapType =
@@ -72,56 +63,63 @@ using PropertyMapType =
 
 namespace ipmi
 {
-    ipmi::RspType<uint8_t>ipmicmdEnterLiveFishBF2()
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("Enter LiveFish command is unsupported in Bluefield 2");
-        return ipmi::response(ipmi::ccResponseError);
-    }
+ipmi::RspType<uint8_t> ipmicmdEnterLiveFishBF2()
+{
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "Enter LiveFish command is unsupported in Bluefield 2");
+    return ipmi::response(ipmi::ccResponseError);
+}
 
-    ipmi::RspType<uint8_t>ipmicmdExitLiveFishBF2()
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("Exit LiveFish command is unsupported in Bluefield 2");
-        return ipmi::response(ipmi::ccResponseError);
-    }
+ipmi::RspType<uint8_t> ipmicmdExitLiveFishBF2()
+{
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "Exit LiveFish command is unsupported in Bluefield 2");
+    return ipmi::response(ipmi::ccResponseError);
+}
 
-    ipmi::RspType<>nicManagerBF2NA()
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("Nic Manager not supported in Bluefield 2");
-        return ipmi::response(ipmi::ccResponseError);
-    }
+ipmi::RspType<> nicManagerBF2NA()
+{
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "Nic Manager not supported in Bluefield 2");
+    return ipmi::response(ipmi::ccResponseError);
+}
 
-    ipmi::RspType<uint8_t> ipmicmdPowerCapGet(ipmi::Context::ptr ctx)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("Power Capping not supported in Bluefield 2");
-        return ipmi::response(ipmi::ccResponseError);
-    }
+ipmi::RspType<uint8_t> ipmicmdPowerCapGet(ipmi::Context::ptr ctx)
+{
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "Power Capping not supported in Bluefield 2");
+    return ipmi::response(ipmi::ccResponseError);
+}
 
-    ipmi::RspType<uint8_t> ipmicmdPowerCapSet(ipmi::Context::ptr ctx, uint8_t parameter)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("Power Capping not supported in Bluefield 2");
-        return ipmi::response(ipmi::ccResponseError);
-    }
+ipmi::RspType<uint8_t> ipmicmdPowerCapSet(ipmi::Context::ptr ctx,
+                                          uint8_t parameter)
+{
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "Power Capping not supported in Bluefield 2");
+    return ipmi::response(ipmi::ccResponseError);
+}
 
-    ipmi::RspType<uint8_t> ipmiCmdERoTReset(ipmi::Context::ptr ctx)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>("ERoT reset is not supported in Bluefield 2");
-        return ipmi::response(ipmi::ccResponseError);
-    }
+ipmi::RspType<uint8_t> ipmiCmdERoTReset(ipmi::Context::ptr ctx)
+{
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "ERoT reset is not supported in Bluefield 2");
+    return ipmi::response(ipmi::ccResponseError);
+}
 
 } // namespace ipmi
 
 void registerNvOemPlatformFunctionsBF2()
 {
-
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdEnterLiveFish));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdEnterLiveFish,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdEnterLiveFishBF2); 
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmicmdEnterLiveFishBF2);
 
-    //Exit Live Fish mode 
+    // Exit Live Fish mode
 
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
@@ -215,6 +213,4 @@ void registerNvOemPlatformFunctionsBF2()
                           ipmi::Privilege::Admin, ipmi::ipmiCmdERoTReset);
 
     return;
-
-
 }

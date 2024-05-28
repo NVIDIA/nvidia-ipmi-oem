@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
-
-
 
 #include "sbmr-bootprogress.hpp"
 
@@ -113,11 +109,11 @@ ipmi::RspType<std::vector<uint8_t>>
         auto respBootProgressCode = std::get<std::vector<uint8_t>>(getRecord);
         if (respBootProgressCode.empty() ||
             respBootProgressCode.size() != sbmrBootProgressSize)
-        {   
-	     phosphor::logging::log<phosphor::logging::level::ERR>
-	         ("ipmiSbmrGetBootProgressCode: xyz.openbmc_project.State.Boot.Raw"
-                 "not initialized, or the host power is OFF");
-	    return ipmi::responseUnspecifiedError();
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiSbmrGetBootProgressCode: xyz.openbmc_project.State.Boot.Raw"
+                "not initialized, or the host power is OFF");
+            return ipmi::responseUnspecifiedError();
         }
 
         return ipmi::responseSuccess(respBootProgressCode);
@@ -134,7 +130,6 @@ ipmi::RspType<uint8_t> ipmiOemSbmrSendDescription(
     uint8_t severity, uint8_t operation1st, uint8_t operation2nd,
     uint8_t subClass, uint8_t codeClass, std::vector<uint8_t> description)
 {
-
     std::string messageData;
 
     ipmi::ChannelInfo chInfo;

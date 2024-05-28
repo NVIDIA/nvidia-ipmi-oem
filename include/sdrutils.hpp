@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-
 
 /*
 // Copyright (c) 2018 Intel Corporation
@@ -111,10 +109,10 @@ inline static bool getSensorSubtree(std::shared_ptr<SensorSubTree>& subtree)
 
     sensorTreePtr = std::make_shared<SensorSubTree>();
 
-    auto mapperCall =
-        dbus.new_method_call("xyz.openbmc_project.ObjectMapper",
-                             "/xyz/openbmc_project/object_mapper",
-                             "xyz.openbmc_project.ObjectMapper", "GetSubTree");
+    auto mapperCall = dbus.new_method_call("xyz.openbmc_project.ObjectMapper",
+                                           "/xyz/openbmc_project/object_mapper",
+                                           "xyz.openbmc_project.ObjectMapper",
+                                           "GetSubTree");
     static constexpr const auto depth = 2;
     static constexpr std::array<const char*, 3> interfaces = {
         "xyz.openbmc_project.Sensor.Value",
@@ -218,7 +216,8 @@ enum class SensorTypeCodes : uint8_t
     other = 0xB,
 };
 
-const static std::string SYS_FW_BIOS_PATH = "/xyz/openbmc_project/sensors/system_firmware_progress/BIOS";
+const static std::string SYS_FW_BIOS_PATH =
+    "/xyz/openbmc_project/sensors/system_firmware_progress/BIOS";
 const static uint8_t BIOS_SENSOR_NUM = 0x06;
 const static uint8_t SENSOR_SPECIFIC_EVENT = 0x6F;
 
@@ -251,7 +250,7 @@ inline static std::string getSensorTypeStringFromPath(const std::string& path)
 
 inline static uint8_t getSensorTypeFromPath(const std::string& path)
 {
-    if(path == SYS_FW_BIOS_PATH)
+    if (path == SYS_FW_BIOS_PATH)
     {
         return static_cast<uint8_t>(SensorTypeCodes::system_firmware_progress);
     }
@@ -268,7 +267,7 @@ inline static uint8_t getSensorTypeFromPath(const std::string& path)
 
 inline static uint16_t getSensorNumberFromPath(const std::string& path)
 {
-    if(path == SYS_FW_BIOS_PATH)
+    if (path == SYS_FW_BIOS_PATH)
     {
         return BIOS_SENSOR_NUM;
     }
@@ -292,7 +291,7 @@ inline static uint16_t getSensorNumberFromPath(const std::string& path)
 
 inline static uint8_t getSensorEventTypeFromPath(const std::string& path)
 {
-    if(path == SYS_FW_BIOS_PATH)
+    if (path == SYS_FW_BIOS_PATH)
     {
         return SENSOR_SPECIFIC_EVENT;
     }
