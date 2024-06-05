@@ -2198,10 +2198,10 @@ uint8_t convertRsyslogFwdEnumItemToByte(std::string str,
     return (it != map.end()) ? it->first : 0xFF;
 }
 
-std::vector<uint8_t> convertIpStringToBytes(const std::string& ip, const std::string& np)
+/* Converts an IP string to Bytes for either IPv4 or IPv6 address */
+bool convertIpStringToBytes(const std::string& ip, const std::string& np,
+                            std::vector<uint8_t>& bytes)
 {
-    std::vector<uint8_t> bytes;
-
     /* IPv4 */
     if (np == "IPv4")
     {
@@ -2209,7 +2209,8 @@ std::vector<uint8_t> convertIpStringToBytes(const std::string& ip, const std::st
         if (inet_pton(AF_INET, ip.c_str(), bytes.data()) != 1)
         {
             /* Invalid IPv4 address */
-            return std::vector<uint8_t>();
+            bytes = std::vector<uint8_t>();
+            return false;
         }
     }
     /* IPv6 */
@@ -2219,16 +2220,18 @@ std::vector<uint8_t> convertIpStringToBytes(const std::string& ip, const std::st
         if (inet_pton(AF_INET6, ip.c_str(), bytes.data()) != 1)
         {
             /* Invalid IPv6 address */
-            return std::vector<uint8_t>();
+            bytes = std::vector<uint8_t>();
+            return false;
         }
     }
     /* Invalid network protocol */
     else
     {
-        return std::vector<uint8_t>();
+        bytes = std::vector<uint8_t>();
+        return false;
     }
 
-    return bytes;
+    return true;
 }
 
 static ipmi::RspType<std::vector<uint8_t>>
@@ -2288,19 +2291,30 @@ static ipmi::RspType<std::vector<uint8_t>>
     std::unordered_map<std::string, std::variant<bool, std::string, uint16_t>> properties;
     for (const auto& propertyName : propertyNames)
     {
-        std::variant<bool, std::string, uint16_t> value;
-        auto val = ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName);
-
-        std::visit([&](auto&& arg)
+        try
         {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, std::string> || std::is_same_v<T, uint16_t>)
-            {
-                value = arg;
-            }
-        }, val);
+            /* Each property in propertyNames is requested and saved in properties unordered map */
+            std::variant<bool, std::string, uint16_t> value;
+            auto val = ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName);
 
-        properties[propertyName] = value;
+            /* Finds the type of each property */
+            std::visit([&](auto&& arg)
+            {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, std::string> || std::is_same_v<T, uint16_t>)
+                {
+                    value = arg;
+                }
+            }, val);
+
+            properties[propertyName] = value;
+        }
+        catch (std::exception& e)
+        {
+            log<level::ERR>("Failed to get rsyslogFwd property",
+                            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+            return ipmi::responseUnspecifiedError();
+        }
     }
 
     /* Creates the response */
@@ -2344,8 +2358,9 @@ static ipmi::RspType<std::vector<uint8_t>>
 
     /* Address */
     std::string address = std::get<std::string>(properties["Address"]);
-    std::vector<uint8_t> addressBytes = convertIpStringToBytes(address, networkProtocol);
-    if (addressBytes.empty())
+    std::vector<uint8_t> addressBytes;
+    if (!convertIpStringToBytes(address, networkProtocol, addressBytes) ||
+        addressBytes.empty())
     {
         phosphor::logging::log<level::ERR>("Address is invalid");
         return ipmi::responseUnspecifiedError();
@@ -2476,7 +2491,8 @@ ipmi::RspType<uint8_t>
             log<level::ERR>("Address is invalid");
             return ipmi::responseInvalidFieldRequest();
         }
-        std::string address = addressBuf;
+        address = addressBuf;
+
         /* Extract Port */
         if (dataIn.size() < PORT_INDEX + PORT_SIZE)
         {
@@ -2538,23 +2554,32 @@ ipmi::RspType<uint8_t>
 
         for (const auto& propertyName : propertyNames)
         {
-            /* Checks current value */
-            Value curValue;
-            auto val = ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName);
-
-            std::visit([&](auto&& arg)
+            try
             {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, std::string> || std::is_same_v<T, uint16_t>)
+                /* Checks current value */
+                Value curValue;
+                auto val = ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName);
+
+                std::visit([&](auto&& arg)
                 {
-                    curValue = arg;
-                }
-            }, val);
+                    using T = std::decay_t<decltype(arg)>;
+                    if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, std::string> || std::is_same_v<T, uint16_t>)
+                    {
+                        curValue = arg;
+                    }
+                }, val);
 
-            /* Sets a new value only if it is different than the current one */
-            if (curValue != propertiesNewVals[propertyName])
+                /* Sets a new value only if it is different than the current one */
+                if (curValue != propertiesNewVals[propertyName])
+                {
+                    ipmi::setDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName, propertiesNewVals[propertyName]);
+                }
+            }
+            catch (std::exception& e)
             {
-                ipmi::setDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName, propertiesNewVals[propertyName]);
+                log<level::ERR>("Failed to get rsyslogFwd property",
+                                phosphor::logging::entry("EXCEPTION=%s", e.what()));
+                return ipmi::responseUnspecifiedError();
             }
         }
     }
