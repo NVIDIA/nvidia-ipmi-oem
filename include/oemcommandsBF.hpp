@@ -43,6 +43,9 @@ constexpr auto enumTorSwitchAllowBMC = 0x01;
 constexpr auto enumTorSwitchAllowDPU = 0x02;
 constexpr auto enumTorSwitchDenyNone = 0x1F;
 constexpr auto enumTorSwitchDisabled = 0x2F;
+constexpr auto enumGuestTunnelQuery = 0x00;
+constexpr auto enumGuestTunnelDisable = 0x01;
+constexpr auto enumGuestTunnelEnable = 0x02;
 
 namespace app
 {
@@ -78,6 +81,7 @@ constexpr auto CmdPowerCapAllocatedWattsSet = 0xCF;
 constexpr auto CmdERoTReset = 0xD2;
 constexpr auto CmdGetRsyslogStatus = 0xD3;
 constexpr auto CmdSetRsyslogStatus = 0xD4;
+constexpr auto cmdGuestTunnel = 0xFD;
 
 } // namespace app
 

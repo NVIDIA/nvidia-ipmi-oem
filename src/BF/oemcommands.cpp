@@ -96,6 +96,15 @@ const char* rsyslogFwdObjPathPrefix = "/xyz/openbmc_project/logging/config/fwd_"
 const char* rsyslogActionsManagerInterface = "xyz.openbmc_project.Logging.RsyslogActionsManager";
 const char* rsyslogFwdInterface = "xyz.openbmc_project.Logging.RsyslogFwd";
 const std::vector<std::string> propertyNames = {"Enabled", "TransportProtocol", "NetworkProtocol", "Address", "Port"};
+// Guest Tunnel
+const char* bmcGuestTunnelService = "xyz.openbmc_project.Settings";
+const char* bmcGuestTunnelBMCObjPath =
+    "/xyz/openbmc_project/control/guest_tunnel";
+const char* bmcGuestTunnelIntf =
+    "xyz.openbmc_project.Object.Enable";
+const char* bmcGuestTunnelStatus = "Enabled";
+const char* guestTunnelSystemdObj =
+    "/org/freedesktop/systemd1/unit/guest_2dtunnel_2eservice";
 
 // User Manager object in dbus
 static constexpr const char* userMgrObjBasePath = "/xyz/openbmc_project/user";
@@ -2587,6 +2596,133 @@ ipmi::RspType<uint8_t>
     return ipmi::responseSuccess();
 }
 
+/**
+ * @brief OEM Command to configure the Guest Tunnel.
+ *
+ * This function communicates with the D-Bus to get the status of Guest
+ * Tunnel. And Set the Guest Tunnel status according to the user input.
+ *
+ * raw 0x3e 0xfd 0x0 - Query Guest Tunnel Status
+ * Return 0x1 - Disabled
+ *        0x2 - Enabled
+ * raw 0x3e 0xfd 0x1 - Disable Guest Tunnel
+ * Return 0x1 - Disabled
+ * raw 0x3e 0xfd 0x2 - Enable Guest Tunnel
+ * Return 0x2 - Enabled
+ *
+ * When the setting commands are excuted
+ * Enabled - Turn on the VLAN device, configure a fixed IP address.
+ * Disabled - Turn off the VLAN device
+ *
+ * @param ctx        A pointer to the IPMI context, which includes information
+ *                   about the D-Bus connection and other context-related data.
+ * @param parameter  The user input parameter for different commands.
+ * @return           An instance of ipmi::RspType<uint8_t> representing the result of the
+ *                   operation.
+ */
+ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
+                                               uint8_t parameter)
+{
+    /*
+     * Received Byte 1:
+     * 0x00                    : Query Guest Tunnel Status
+     * 0x01                    : Diable Guest Tunnel
+     * 0x02                    : Enable Guest Tunnel
+     */
+    bool setEnabled = false;
+    try {
+        auto method = ctx->bus->new_method_call(bmcGuestTunnelService,
+                                                bmcGuestTunnelBMCObjPath,
+                                                dbusPropertyInterface, "Get");
+        method.append(bmcGuestTunnelIntf, bmcGuestTunnelStatus);
+        auto reply = ctx->bus->call(method);
+        if (reply.is_method_error())
+        {
+            log<level::ERR>("ipmicmdGuestTunnel: Get Dbus error",
+                            entry("SERVICE=%s", bmcGuestTunnelService));
+            return ipmi::responseResponseError();
+        }
+
+        std::variant<bool> value;
+        reply.read(value);
+        auto currState = std::get<bool>(value);
+
+        switch (parameter)
+        {
+            // Get Guest Tunnel
+            case ipmi::nvidia::enumGuestTunnelQuery:
+                if (currState == true)
+                {
+                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelEnable);
+                }
+                else
+                {
+                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelDisable);
+                }
+                break;
+            case ipmi::nvidia::enumGuestTunnelDisable:
+                if (currState == false)
+                {
+                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelDisable);
+                }
+                setEnabled = false;
+                break;
+            case ipmi::nvidia::enumGuestTunnelEnable:
+                if (currState == true)
+                {
+                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelEnable);
+                }
+                setEnabled = true;
+                break;
+            default:
+                log<level::ERR>("ipmicmdGuestTunnel: Invalid Parameter");
+                return ipmi::responseInvalidFieldRequest();
+        }
+    }
+    catch (const std::exception& e)
+    {
+        log<level::ERR>("Get Guest Tunnel Current State Error",
+                        entry("ERROR=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+
+    // Set Guest Tunnel
+    try
+    {
+        std::variant<bool> value(setEnabled);
+
+        auto method = ctx->bus->new_method_call(bmcGuestTunnelService,
+                                                bmcGuestTunnelBMCObjPath,
+                                                dbusPropertyInterface, "Set");
+        method.append(bmcGuestTunnelIntf, bmcGuestTunnelStatus,
+                      value);
+        auto reply = ctx->bus->call(method);
+    }
+    catch (const std::exception& e)
+    {
+        log<level::ERR>("Set Guest Tunnel State Error",
+                        entry("ERROR=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+
+    // Restart Guest Tunnel Control Service
+    try
+    {
+        auto method = ctx->bus->new_method_call(systemdServiceBf,
+                                                guestTunnelSystemdObj,
+                                                systemdUnitIntfBf, "Restart");
+        method.append("replace");
+        ctx->bus->call_noreply(method);
+    }
+    catch (const std::exception& e)
+    {
+        log<level::ERR>("Failed to restart Get Tunnel Control service",
+                        phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+    return ipmi::responseSuccess(parameter);
+}
+
 } // namespace ipmi
 
 void registerNvOemPlatformFunctions()
@@ -2956,6 +3092,11 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::CmdSetRsyslogStatus,
                           ipmi::Privilege::Admin, ipmi::ipmiSetRsyslogStatus);
+
+    // <Guest Tunnel>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
+                          ipmi::nvidia::app::cmdGuestTunnel,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdGuestTunnel);
 
     return;
 }

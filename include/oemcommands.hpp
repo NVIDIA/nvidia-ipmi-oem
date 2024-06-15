@@ -26,6 +26,7 @@ namespace nvidia
 constexpr auto netFnOemGlobal = 0x32;
 constexpr auto netFnOemNV = 0x3C;
 constexpr auto netFnOemPost = 0x30;
+constexpr auto netFnOemEight = 0x3E;
 constexpr auto netGroupExt = 0x52;
 
 namespace app
