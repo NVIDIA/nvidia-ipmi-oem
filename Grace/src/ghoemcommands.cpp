@@ -449,9 +449,17 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
 ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
                                              uint8_t request)
 {
+#ifdef GB200_FAN_ENABLE
+    std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
+                                       nvidia::fanZoneCtrlName1,
+                                       nvidia::fanZoneCtrlName2,
+                                       nvidia::fanZoneCtrlName3,
+                                       nvidia::fanZoneCtrlName4};
+#else
     std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
                                        nvidia::fanZoneCtrlName1,
                                        nvidia::fanZoneCtrlName2};
+#endif
     /* if not valid zone, return error */
     if (zone >= nvidia::fanZones)
     {
@@ -471,7 +479,11 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
     }
 
     /* get the control paths for the fans */
+#ifdef GB200_FAN_ENABLE
+    std::array<std::string, nvidia::fanZones> ctrlPaths = {"", "", "", "", ""};
+#else
     std::array<std::string, nvidia::fanZones> ctrlPaths = {"", "", ""};
+#endif
     std::filesystem::path hwmonPath("/sys/class/hwmon/");
     for (const auto& path : std::filesystem::directory_iterator{hwmonPath})
     {

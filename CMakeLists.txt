@@ -45,6 +45,10 @@ option (custom-pwm-fan
         "To support customize platforms pwm/fan configurations"
         OFF)
 
+option (gb200-fan-enable
+        "To support GB200 fan configurations"
+        OFF)
+
 option (custom-oem-cmd
         "To support commands/configuration relevant for new platforms"
         OFF)
@@ -145,6 +149,16 @@ if(custom-pwm-fan)
     add_compile_definitions(CONFIG_PWM=${config-pwm})
     add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME1=${config-fanZoneCtrlName1})
     add_compile_definitions(CONFIG_FAN_ZONE_CTRL_NAME2=${config-fanZoneCtrlName2})
+endif()
+
+if(gb200-fan-enable)
+    add_compile_definitions(GB200_FAN_ENABLE=${gb200-fan-enable})
+    add_compile_definitions(GB200_PWM=${gb200-pwm})
+    add_compile_definitions(GB200_FAN_CTRL=${gb200-fan-ctrl})
+    add_compile_definitions(CONFIG_GB200_FAN_ZONE_CTRL_NAME1=${config-gb200-fanZoneCtrlName1})
+    add_compile_definitions(CONFIG_GB200_FAN_ZONE_CTRL_NAME2=${config-gb200-fanZoneCtrlName2})
+    add_compile_definitions(CONFIG_GB200_FAN_ZONE_CTRL_NAME3=${config-gb200-fanZoneCtrlName3})
+    add_compile_definitions(CONFIG_GB200_FAN_ZONE_CTRL_NAME4=${config-gb200-fanZoneCtrlName4})
 endif()
 
 if(custom-oem-cmd)

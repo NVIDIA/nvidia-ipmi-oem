@@ -37,13 +37,22 @@ namespace nvidia
 
 constexpr auto fanServiceName = "phosphor-pid-control";
 constexpr auto fanNoServiceSpeed = 100;
-constexpr auto fanZones = 3;
+//constexpr auto fanZones = 3;
 constexpr auto fanZoneCtrlName0 = "";
 #ifdef CUSTOM_PWM_FAN
+constexpr auto fanZones = 3;
 constexpr auto pwm = int(CONFIG_PWM);
 constexpr auto fanZoneCtrlName1 = STR(CONFIG_FAN_ZONE_CTRL_NAME1);
 constexpr auto fanZoneCtrlName2 = STR(CONFIG_FAN_ZONE_CTRL_NAME2);
+#elif GB200_FAN_ENABLE
+constexpr auto fanZones = int(GB200_FAN_CTRL);
+constexpr auto pwm = int(GB200_PWM);
+constexpr auto fanZoneCtrlName1 = STR(CONFIG_GB200_FAN_ZONE_CTRL_NAME1);
+constexpr auto fanZoneCtrlName2 = STR(CONFIG_GB200_FAN_ZONE_CTRL_NAME2);
+constexpr auto fanZoneCtrlName3 = STR(CONFIG_GB200_FAN_ZONE_CTRL_NAME3);
+constexpr auto fanZoneCtrlName4 = STR(CONFIG_GB200_FAN_ZONE_CTRL_NAME4);
 #else
+constexpr auto fanZones = 3;
 constexpr auto pwm = 4;
 constexpr auto fanZoneCtrlName1 = "max31790_1";
 constexpr auto fanZoneCtrlName2 = "max31790_2";
