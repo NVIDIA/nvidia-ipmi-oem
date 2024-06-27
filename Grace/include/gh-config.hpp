@@ -37,7 +37,6 @@ namespace nvidia
 
 constexpr auto fanServiceName = "phosphor-pid-control";
 constexpr auto fanNoServiceSpeed = 100;
-//constexpr auto fanZones = 3;
 constexpr auto fanZoneCtrlName0 = "";
 #ifdef CUSTOM_PWM_FAN
 constexpr auto fanZones = 3;
