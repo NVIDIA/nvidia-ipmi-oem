@@ -94,6 +94,19 @@ enum class Mode : uint8_t
     Stop,
     Start
 };
+// CPU diag commands
+#ifdef CPU_DIAG_ENABLE
+constexpr auto cmdSetDiag = 0x1A;
+constexpr auto cmdGetDiag = 0x1B;
+constexpr auto cmdSetDiagSystemConfig = 0x2A;
+constexpr auto cmdGetDiagSystemConfig = 0x2B;
+constexpr auto cmdSetDiagConfig = 0x2C;
+constexpr auto cmdGetDiagConfig = 0x2D;
+constexpr auto cmdSetDiagResult = 0x3A;
+constexpr auto cmdGetDiagResult = 0x3B;
+constexpr auto cmdSetDiagFlowCtrl = 0x4A;
+constexpr auto cmdGetDiagFlowCtrl = 0x4B;
+#endif
 
 } // namespace misc
 namespace chassis

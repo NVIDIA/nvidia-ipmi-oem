@@ -56,6 +56,9 @@ option (bf3-chassis-commands
         "To support commands relevant only to BF3"
         OFF)
 
+option (cpu-diag-enable
+	"To support commands relevant for CPU diag"
+        OFF)
 
 set (
     CMAKE_CXX_FLAGS
@@ -163,6 +166,9 @@ endif()
 
 if(custom-oem-cmd)
 	add_compile_definitions(CUSTOM_OEM_CMD=${custom-oem-cmd})
+endif()
+if(cpu-diag-enable)
+        add_compile_definitions(CPU_DIAG_ENABLE=${cpu-diag-enable})
 endif()
 
 if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)
