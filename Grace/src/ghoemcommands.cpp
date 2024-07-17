@@ -2420,6 +2420,7 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
             {
                 testDuration = item["TestDuration"].get<uint8_t>();
                 value = item["DynamicData"].get<std::vector<uint8_t>>();
+		//Host accept the fix size packet of 250 bytes
                 size_t numValuesToCopy = std::min(value.size(),paddingValue.size());
                 std::copy_n(value.begin(),numValuesToCopy,paddingValue.begin());
                 found = true;
@@ -2442,9 +2443,9 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
     return ipmi::responseSuccess(testDuration,paddingValue);
 }
 
-//setDiagConfig
+//setDiagTidConfig
 ipmi::RspType<uint8_t>
-    setDiagConfig(ipmi::Context::ptr ctx,uint8_t tid,uint8_t testDuration,uint8_t loopsMsb,uint8_t loopsLsb,uint8_t logLevel,uint8_t dynamicDataSize,std::vector<uint8_t> dynamicData)
+    setDiagTidConfig(ipmi::Context::ptr ctx,uint8_t tid,uint8_t testDuration,uint8_t loopsMsb,uint8_t loopsLsb,uint8_t logLevel,uint8_t dynamicDataSize,std::vector<uint8_t> dynamicData)
 {
     std::variant<std::string> variantData;
     std::string jsonValue;
@@ -2456,7 +2457,7 @@ ipmi::RspType<uint8_t>
 
     if(dynamicData.empty() ||(dynamicDataSize > 244) || (dynamicDataSize != dynamicData.size()))
     {
-        phosphor::logging::log<level::ERR>("Invalid ConfigType");
+        phosphor::logging::log<level::ERR>("Invalid DynamicData");
         return ipmi::responseUnspecifiedError();
     }
     try
@@ -2513,14 +2514,14 @@ ipmi::RspType<uint8_t>
     return ipmi::responseSuccess();
 }
 
-//getDiagConfig
-ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
-    getDiagConfig(ipmi::Context::ptr ctx,uint8_t tid)
+//getDiagTidConfig
+ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
+    getDiagTidConfig(ipmi::Context::ptr ctx,uint8_t tid)
 {
     std::string jsonValue;
     std::variant<std::string> variantData;
     std::vector<uint8_t>dynamicData;
-    std::vector<uint8_t>paddingValue(245,0);
+    std::vector<uint8_t>paddingValue(244,0);
     std::uint8_t testDuration;
     std::uint8_t loopMsb;
     std::uint8_t loopLsb;
@@ -2558,6 +2559,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
                 logLevel = item["LogLevel"].get<uint8_t>();
                 dynamicDataSize = item["DynamicDataSize"].get<uint8_t>();
                 dynamicData = item["DynamicData"].get<std::vector<uint8_t>>();
+		//Host accept the fix size packet of 250 bytes
                 size_t numValuesToCopy = std::min(dynamicData.size(),paddingValue.size());
                 std::copy_n(dynamicData.begin(),numValuesToCopy,paddingValue.begin());
                 found = true;
@@ -2580,7 +2582,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
     }
     loopLsb = static_cast<uint8_t>(loops & 0xFF);
     loopMsb = static_cast<uint8_t>((loops >> 8) & 0xFF);
-    return ipmi::responseSuccess(testDuration,loopMsb,loopLsb,logLevel,dynamicDataSize,paddingValue);
+    return ipmi::responseSuccess(tid,testDuration,loopMsb,loopLsb,logLevel,dynamicDataSize,paddingValue);
 }
 //setDiagResult
 ipmi::RspType<uint8_t>
@@ -3082,19 +3084,19 @@ void registerNvOemFunctions()
 
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetDiagConfig));
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetDiagTidConfig));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
-                          ipmi::nvidia::misc::cmdSetDiagConfig,
-                          ipmi::Privilege::Admin, ipmi::setDiagConfig);
+                          ipmi::nvidia::misc::cmdSetDiagTidConfig,
+                          ipmi::Privilege::Admin, ipmi::setDiagTidConfig);
 
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetDiagConfig));
+        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetDiagTidConfig));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
-                          ipmi::nvidia::misc::cmdGetDiagConfig,
-                          ipmi::Privilege::Admin, ipmi::getDiagConfig);
+                          ipmi::nvidia::misc::cmdGetDiagTidConfig,
+                          ipmi::Privilege::Admin, ipmi::getDiagTidConfig);
 
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
