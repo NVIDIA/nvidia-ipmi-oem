@@ -2424,6 +2424,7 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
                 size_t numValuesToCopy = std::min(value.size(),paddingValue.size());
                 std::copy_n(value.begin(),numValuesToCopy,paddingValue.begin());
                 found = true;
+		break;
             }
         }
         if(found == false)
@@ -2596,15 +2597,11 @@ ipmi::RspType<uint8_t>
     resultValue = static_cast<uint16_t>(resultMsb << 8);
     resultValue |= static_cast<uint16_t>(resultLsb);
 
-    if((resultMaskSize > 246) || (resultMask.size() != resultMaskSize))
+    if(resultMaskSize > 246)
     {
         phosphor::logging::log<level::ERR>("Invalid ResultMask");
         return ipmi::responseUnspecifiedError();
     }
-    // Initialize the resultMaskVal with 246 zero's
-    std::vector<uint8_t> resultMaskVal(246,0);
-    //Copy resultMask to resultMaskVal so that payload is of fixed size 246
-    std::copy(resultMask.begin(),resultMask.begin() + resultMaskSize,resultMaskVal.begin());
     try
     {
         auto method = ctx->bus->new_method_call(diagService,
@@ -2630,14 +2627,14 @@ ipmi::RspType<uint8_t>
             {
                 item["Result"] = resultValue;
                 item["ResultMaskSize"] = resultMaskSize;
-                item["ResultMask"] = resultMaskVal;
+                item["ResultMask"] = resultMask;
                 found = true;
                 break;
             }
         }
         if(!found)
         {
-           j.push_back({{"Tid",tid},{"Result",resultValue},{"ResultMaskSize",resultMaskSize},{"ResultMask",resultMaskVal}});
+           j.push_back({{"Tid",tid},{"Result",resultValue},{"ResultMaskSize",resultMaskSize},{"ResultMask",resultMask}});
         }
         std::string jsonString = j.dump();
 
@@ -2655,7 +2652,7 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
           return ipmi::responseUnspecifiedError();
     }
-    return ipmi::responseSuccess();
+    return ipmi::responseSuccess(ccSuccess);
 }
 ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
     getDiagResult(ipmi::Context::ptr ctx,uint8_t tid)
@@ -2737,7 +2734,7 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    return ipmi::responseSuccess();
+    return ipmi::responseSuccess(ccSuccess);
 }
 //getDiagFlowCtrl
 ipmi::RspType<uint8_t>
