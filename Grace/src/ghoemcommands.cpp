@@ -2225,6 +2225,16 @@ ipmi::RspType<uint8_t>
                                                 dbusPropertyInterface, "Set");
         method.append(diagIntf, "DiagMode", diagMode);
         auto reply = ctx->bus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<level::ERR>(
+                "setDiag: Set Dbus method returned "
+                "error",
+                phosphor::logging::entry("SERVICE=%s",
+                                         diagService));
+            return ipmi::responseUnspecifiedError();
+        }
+
         if(mode == 0)
         {
             std::string diagSysConfigString = R"([])";
@@ -2234,6 +2244,15 @@ ipmi::RspType<uint8_t>
             std::variant<std::string> variantDiagSysData = diagSysConfigString;
             method1.append(diagIntf, "DiagSystemConfig", variantDiagSysData);
             auto reply1 = ctx->bus->call(method1);
+            if (reply1.is_method_error())
+            {
+                phosphor::logging::log<level::ERR>(
+                    "DiagSystemConfig: Set Dbus method returned "
+                    "error",
+                    phosphor::logging::entry("SERVICE=%s",
+                                             diagService));
+                return ipmi::responseUnspecifiedError();
+            }
 
             std::string configString = R"([])";
             auto method2 = ctx->bus->new_method_call(diagService,
@@ -2242,6 +2261,15 @@ ipmi::RspType<uint8_t>
             std::variant<std::string> variantData = configString;
             method2.append(diagIntf, "DiagConfig", variantData);
             auto reply2 = ctx->bus->call(method2);
+            if (reply2.is_method_error())
+            {
+                phosphor::logging::log<level::ERR>(
+                    "DiagConfig: Set Dbus method returned "
+                    "error",
+                    phosphor::logging::entry("SERVICE=%s",
+                                             diagService));
+                return ipmi::responseUnspecifiedError();
+            }
 
             std::string resultString = R"([])";
             auto method3 = ctx->bus->new_method_call(diagService,
@@ -2250,6 +2278,34 @@ ipmi::RspType<uint8_t>
             std::variant<std::string> variantResultData = resultString;
             method3.append(diagIntf, "DiagResult", variantResultData);
             auto reply3 = ctx->bus->call(method3);
+            if (reply3.is_method_error())
+            {
+                phosphor::logging::log<level::ERR>(
+                    "DiagResult: Set Dbus method returned "
+                    "error",
+                    phosphor::logging::entry("SERVICE=%s",
+                                             diagService));
+                return ipmi::responseUnspecifiedError();
+            }
+
+            //Set Diag Status to not started
+	    std::uint8_t flowCtrl = 4;
+            auto method4 = ctx->bus->new_method_call(diagService,
+                                                diagServiceObj,
+                                                dbusPropertyInterface, "Set");
+	    std::variant<uint8_t>varFlowCtrl = flowCtrl;
+            method4.append(diagIntf, "DiagStatus", varFlowCtrl);
+            auto reply4 = ctx->bus->call(method4);
+            if (reply4.is_method_error())
+            {
+                phosphor::logging::log<level::ERR>(
+                    "DiagStatus: Set Dbus method returned "
+                    "error",
+                    phosphor::logging::entry("SERVICE=%s",
+                                             diagService));
+                return ipmi::responseUnspecifiedError();
+            }
+
             auto r = system(stopDiagTimerString.c_str());
             if (r != 0)
             {
@@ -2280,7 +2336,7 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    return ipmi::responseSuccess();
+    return ipmi::responseSuccess(ccSuccess);
 }
 //getDiag
 ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
@@ -2303,7 +2359,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "getDiag: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2316,8 +2372,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    bool mode;
-    mode=std::get<bool>(diagMode);
+    bool mode=std::get<bool>(diagMode);
     return ipmi::responseSuccess(static_cast<uint8_t>(mode),majorVer,minorVer,patchVer);
 }
 //setDiagSystemConfig
@@ -2343,7 +2398,7 @@ ipmi::RspType<uint8_t>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "setDiagSystemConfig: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2373,6 +2428,15 @@ ipmi::RspType<uint8_t>
         std::variant<std::string> variantData = jsonString;
         method1.append(diagIntf, "DiagSystemConfig", variantData);
         auto reply1 = ctx->bus->call(method1);
+        if (reply1.is_method_error())
+        {
+            phosphor::logging::log<level::ERR>(
+                "setDiagSystemConfig: Set Dbus method returned "
+                "error",
+                phosphor::logging::entry("SERVICE=%s",
+                                         diagService));
+            return ipmi::responseUnspecifiedError();
+        }
 
     }
     catch (const std::exception& e)
@@ -2381,7 +2445,7 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
           return ipmi::responseUnspecifiedError();
     }
-    return ipmi::responseSuccess();
+    return ipmi::responseSuccess(ccSuccess);
 }
 //getDiagSystemConfig
 ipmi::RspType<uint8_t,std::vector<uint8_t>>
@@ -2390,7 +2454,7 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
     std::string jsonValue;
     std::variant<std::string> variantData;
     std::vector<uint8_t>value;
-    std::vector<uint8_t>paddingValue(249,0);
+    std::vector<uint8_t>paddingValue(199,0);
     std::uint8_t testDuration;
     bool found=false;
 
@@ -2404,7 +2468,7 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "getDiagSystemConfig: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2420,7 +2484,7 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
             {
                 testDuration = item["TestDuration"].get<uint8_t>();
                 value = item["DynamicData"].get<std::vector<uint8_t>>();
-		//Host accept the fix size packet of 250 bytes
+		//Host accept the fix size packet of 200 bytes
                 size_t numValuesToCopy = std::min(value.size(),paddingValue.size());
                 std::copy_n(value.begin(),numValuesToCopy,paddingValue.begin());
                 found = true;
@@ -2456,7 +2520,7 @@ ipmi::RspType<uint8_t>
     loopValue = static_cast<uint16_t>(loopsMsb << 8);
     loopValue |= static_cast<uint16_t>(loopsLsb);
 
-    if(dynamicData.empty() ||(dynamicDataSize > 244) || (dynamicDataSize != dynamicData.size()))
+    if(dynamicData.empty() ||(dynamicDataSize > 194) || (dynamicDataSize != dynamicData.size()))
     {
         phosphor::logging::log<level::ERR>("Invalid DynamicData");
         return ipmi::responseUnspecifiedError();
@@ -2471,7 +2535,7 @@ ipmi::RspType<uint8_t>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "setDiagTidConfig: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2504,6 +2568,15 @@ ipmi::RspType<uint8_t>
         std::variant<std::string> variantData = jsonString;
         method1.append(diagIntf, "DiagConfig", variantData);
         auto reply1 = ctx->bus->call(method1);
+        if (reply1.is_method_error())
+        {
+            phosphor::logging::log<level::ERR>(
+                "setDiagTidConfig: Set Dbus method returned "
+                "error",
+                phosphor::logging::entry("SERVICE=%s",
+                                         diagService));
+            return ipmi::responseUnspecifiedError();
+        }
 
     }
     catch (const std::exception& e)
@@ -2512,7 +2585,7 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
           return ipmi::responseUnspecifiedError();
     }
-    return ipmi::responseSuccess();
+    return ipmi::responseSuccess(ccSuccess);
 }
 
 //getDiagTidConfig
@@ -2522,7 +2595,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_
     std::string jsonValue;
     std::variant<std::string> variantData;
     std::vector<uint8_t>dynamicData;
-    std::vector<uint8_t>paddingValue(244,0);
+    std::vector<uint8_t>paddingValue(194,0);
     std::uint8_t testDuration;
     std::uint8_t loopMsb;
     std::uint8_t loopLsb;
@@ -2541,7 +2614,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "getDiagTidConfig: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2560,7 +2633,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_
                 logLevel = item["LogLevel"].get<uint8_t>();
                 dynamicDataSize = item["DynamicDataSize"].get<uint8_t>();
                 dynamicData = item["DynamicData"].get<std::vector<uint8_t>>();
-		//Host accept the fix size packet of 250 bytes
+		//Host accept the fix size packet of 200 bytes
                 size_t numValuesToCopy = std::min(dynamicData.size(),paddingValue.size());
                 std::copy_n(dynamicData.begin(),numValuesToCopy,paddingValue.begin());
                 found = true;
@@ -2597,7 +2670,7 @@ ipmi::RspType<uint8_t>
     resultValue = static_cast<uint16_t>(resultMsb << 8);
     resultValue |= static_cast<uint16_t>(resultLsb);
 
-    if(resultMaskSize > 246)
+    if(resultMaskSize > 196)
     {
         phosphor::logging::log<level::ERR>("Invalid ResultMask");
         return ipmi::responseUnspecifiedError();
@@ -2612,7 +2685,7 @@ ipmi::RspType<uint8_t>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "setDiagResult: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2644,6 +2717,15 @@ ipmi::RspType<uint8_t>
         std::variant<std::string> variantData = jsonString;
         method1.append(diagIntf, "DiagResult", variantData);
         auto reply1 = ctx->bus->call(method1);
+        if (reply1.is_method_error())
+        {
+            phosphor::logging::log<level::ERR>(
+                "setDiagResult: Set Dbus method returned "
+                "error",
+                phosphor::logging::entry("SERVICE=%s",
+                                         diagService));
+            return ipmi::responseUnspecifiedError();
+        }
 
     }
     catch (const std::exception& e)
@@ -2676,7 +2758,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "getDiagResult: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2728,6 +2810,15 @@ ipmi::RspType<uint8_t>
                                                 dbusPropertyInterface, "Set");
         method.append(diagIntf, "DiagStatus", varFlowCtrl);
         auto reply = ctx->bus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<level::ERR>(
+                "setDiagFlowCtrl: Set Dbus method returned "
+                "error",
+                phosphor::logging::entry("SERVICE=%s",
+                                         diagService));
+            return ipmi::responseUnspecifiedError();
+        }
     }
     catch (const std::exception& e)
     {
@@ -2751,7 +2842,7 @@ ipmi::RspType<uint8_t>
         if (reply.is_method_error())
         {
             phosphor::logging::log<level::ERR>(
-                "cmdGetCommand: Get Dbus method returned "
+                "getDiagFlowCtrl: Get Dbus method returned "
                 "error",
                 phosphor::logging::entry("SERVICE=%s",
                                          diagService));
@@ -2764,8 +2855,7 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    uint8_t flowCtrl;
-    flowCtrl=std::get<uint8_t>(varFlowCtrl);
+    uint8_t flowCtrl=std::get<uint8_t>(varFlowCtrl);
     return ipmi::responseSuccess(flowCtrl);
 }
 #endif //CPU_DIAG_ENABLE
