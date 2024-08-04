@@ -46,6 +46,9 @@ constexpr auto enumTorSwitchDisabled = 0x2F;
 constexpr auto enumGuestTunnelQuery = 0x00;
 constexpr auto enumGuestTunnelDisable = 0x01;
 constexpr auto enumGuestTunnelEnable = 0x02;
+constexpr auto enumBIOSModeNormal = 0x0;
+constexpr auto enumBIOSModeDebug = 0x1;
+constexpr auto enumBIOSModeQuery = 0x2;
 
 namespace app
 {
@@ -82,6 +85,7 @@ constexpr auto CmdERoTReset = 0xD2;
 constexpr auto CmdGetRsyslogStatus = 0xD3;
 constexpr auto CmdSetRsyslogStatus = 0xD4;
 constexpr auto cmdGuestTunnel = 0xFD;
+constexpr auto cmdBIOSMode = 0x24;
 
 } // namespace app
 

@@ -52,6 +52,8 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include <memory>
+#include <stdexcept>
 
 #define MAX_ENTRIES_PER_LOGTYPE  10
 #define IPV4_ADDR_SIZE           4
@@ -105,7 +107,9 @@ const char* bmcGuestTunnelIntf =
 const char* bmcGuestTunnelStatus = "Enabled";
 const char* guestTunnelSystemdObj =
     "/org/freedesktop/systemd1/unit/guest_2dtunnel_2eservice";
-
+// BIOS Mode
+const char* rshimCmdSetBiosMode = "/usr/sbin/rshim -c --set-debug";
+const char* rshimCmdGetBiosMode = "/usr/sbin/rshim -c --get-debug";
 // User Manager object in dbus
 static constexpr const char* userMgrObjBasePath = "/xyz/openbmc_project/user";
 static constexpr const char* userMgrInterface =
@@ -2723,6 +2727,149 @@ ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
     return ipmi::responseSuccess(parameter);
 }
 
+/**
+ * @brief Executes a shell command and returns its output and return code.
+ *
+ * @param command The shell command to be executed.
+ * @return A std::pair containing the command's output (std::string) and the return code (int).
+ */
+std::pair<std::string, int> executeCommand(const char* command, int readUntil = 512)
+{
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command, "r"), pclose);
+    if (!pipe)
+    {
+        throw std::runtime_error("Failed executing command: " + std::string(command));
+    }
+    // Read until EOF or readUntil is reached
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr && readUntil > 0) 
+    {
+        result += buffer.data();
+        readUntil -= strlen(buffer.data());
+    }
+    int rc = pclose(pipe.release());
+    if (rc == -1)
+    {
+        throw std::runtime_error("Failed to close pipe");
+    }
+
+    rc = WIFEXITED(rc) ? WEXITSTATUS(rc) : -1; // Get rc from the child process
+
+    // Remove spaces and newlines
+    result.erase(std::remove_if(result.begin(), result.end(), ::isspace), result.end());
+
+    return std::make_pair(result, rc);
+}
+
+/**
+ * @brief Sets the BIOS mode on the system based on the given parameter.
+ *
+ * Checks the current BIOS mode and, if necessary, changes it to the requested mode
+ * (Debug or Normal). Executes a command to set the mode via rshim.
+ *
+ * @param ctx The IPMI context.
+ * @param parameter The requested BIOS mode (0/1).
+ * @return An IPMI response indicating the result of the operation.
+ */
+ipmi::RspType<uint8_t> ipmicmdBIOSModeSet(ipmi::Context::ptr ctx,
+                                               uint8_t parameter)
+{
+    try
+    {
+        bool set_to_debug = false;
+        switch (parameter) // Check the requested mode
+        {
+            case ipmi::nvidia::enumBIOSModeDebug:
+                set_to_debug = true;
+                break;
+            case ipmi::nvidia::enumBIOSModeNormal:
+                break;
+            default:
+                log<level::ERR>("ipmicmdBIOSMode: Invalid Set Parameter Value Received",
+                                entry("VALUE=%u", parameter));
+                return ipmi::responseInvalidFieldRequest(); // Invalid parameter, return ipmi error
+        }
+        auto biosModeForRshim = set_to_debug ? ipmi::nvidia::enumBIOSModeDebug : ipmi::nvidia::enumBIOSModeNormal;
+
+        std::string command = std::string(rshimCmdSetBiosMode) + " " + std::to_string(biosModeForRshim); // Build the set command
+        executeCommand(command.c_str()); // Set the mode via rshim
+
+        std::pair<std::string, int> ret = executeCommand(rshimCmdGetBiosMode); // Get the applied mode and check if it was set correctly
+        int mode = std::stoi(ret.first, nullptr, 16); // Convert recived hex mode to int
+
+        if (ret.second != 0 || (mode != biosModeForRshim)) // Check if the mode was set correctly
+        {
+            log<level::ERR>("Failed to set BIOS mode in rshim",
+                            entry("COMMAND_OUTPUT=%s", ret.first.c_str()));
+            return ipmi::responseResponseError();
+        }      
+    }
+    catch (const std::exception& e)
+    {
+        log<level::ERR>("Set BIOS Mode State Error",
+                        entry("ERROR=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(parameter);
+}
+
+/**
+ * @brief OEM Command for getting/setting the BIOS Mode.
+ *
+ * Example:
+ * raw 0x3e 0x24 0x2 - Query BIOS Mode Status
+ * Returns 0x0 - Normal/Default mode
+ *         0x1 - Debug mode
+ * 
+ * raw 0x3e 0x24 0x0 - Set BIOS Mode to Normal
+ * Returns 0x0
+ * raw 0x3e 0x24 0x1 - Set BIOS Mode to Debug
+ * Returns 0x1
+ *
+ *
+ * @param ctx        A pointer to the IPMI context, which includes information
+ *                   about the D-Bus connection and other context-related data.
+ * @param parameter  The user input parameter for different commands.
+    1 Byte parameter:
+    * 0x00                    : Set BIOS Mode to Normal
+    * 0x01                    : Set BIOS Mode to Debug
+    * 0x02                    : Query BIOS Mode Status
+ *
+ * @return           An instance of ipmi::RspType<uint8_t> representing the result of the
+ *                   operation.
+ */
+ipmi::RspType<uint8_t> ipmicmdBIOSMode(ipmi::Context::ptr ctx,
+                                               uint8_t parameter)
+{
+    try
+    {
+        if (parameter == ipmi::nvidia::enumBIOSModeQuery)
+        {
+            std::pair<std::string, int> ret = executeCommand(rshimCmdGetBiosMode);
+            uint8_t biosMode = std::stoi(ret.first, nullptr, 16);
+
+            if (ret.second != 0 || 
+                (biosMode != ipmi::nvidia::enumBIOSModeDebug && 
+                biosMode != ipmi::nvidia::enumBIOSModeNormal))
+            {
+                log<level::ERR>("Failed to get BIOS mode from rshim",
+                                entry("COMMAND_OUTPUT=%s", ret.first.c_str()));
+                return ipmi::responseResponseError();
+            }
+            return ipmi::responseSuccess(biosMode);
+        }
+        
+        return ipmicmdBIOSModeSet(ctx, parameter);
+    }
+    catch (const std::exception& e)
+    {
+        log<level::ERR>("Get BIOS Mode Error",
+                        entry("ERROR=%s", e.what()));
+        return ipmi::responseUnspecifiedError();
+    }    
+}
 } // namespace ipmi
 
 void registerNvOemPlatformFunctions()
@@ -3097,6 +3244,11 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
                           ipmi::nvidia::app::cmdGuestTunnel,
                           ipmi::Privilege::Admin, ipmi::ipmicmdGuestTunnel);
+    
+    // <BIOS Mode>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
+                          ipmi::nvidia::app::cmdBIOSMode,
+                          ipmi::Privilege::Admin, ipmi::ipmicmdBIOSMode);
 
     return;
 }
