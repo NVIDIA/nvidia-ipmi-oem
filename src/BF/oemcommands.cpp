@@ -2463,7 +2463,7 @@ ipmi::RspType<uint8_t>
     if (networkProtocolStr == "xyz.openbmc_project.Logging.RsyslogFwd.NetworkProtocol.IPv4")
     {
         /* Extracts Address. Address size is 4 Bytes */
-        if (dataIn.size() < ADDRESS_INDEX + IPV4_ADDR_SIZE)
+        if (dataIn.size() != ADDRESS_INDEX + IPV4_ADDR_SIZE + PORT_SIZE)
         {
             log<level::ERR>("Address is invalid");
             return ipmi::responseInvalidFieldRequest();
@@ -2490,7 +2490,7 @@ ipmi::RspType<uint8_t>
     else /* IPv6 */
     {
         /* Extracts Address. Address size is 16 Bytes */
-        if (dataIn.size() < ADDRESS_INDEX + IPV6_ADDR_SIZE)
+        if (dataIn.size() != ADDRESS_INDEX + IPV6_ADDR_SIZE + PORT_SIZE)
         {
             log<level::ERR>("Address is invalid");
             return ipmi::responseInvalidFieldRequest();
