@@ -2343,12 +2343,6 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
     getDiag(ipmi::Context::ptr ctx,uint8_t majorVer,uint8_t minorVer,uint8_t patchVer)
 {
     std::variant<bool>diagMode;
-    if (!((OEM_DIAG_MAJOR_VER == majorVer) && (OEM_DIAG_MINOR_VER == minorVer) && (OEM_DIAG_PATCH_VER == patchVer)))
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-          "Invalid Diag version");
-        return ipmi::responseResponseError();
-    }
     try
     {
         auto method = ctx->bus->new_method_call(diagService,
@@ -2856,6 +2850,11 @@ ipmi::RspType<uint8_t>
         return ipmi::responseUnspecifiedError();
     }
     uint8_t flowCtrl=std::get<uint8_t>(varFlowCtrl);
+    //Return flowCtrl 0 in case of inprogress
+    if(flowCtrl == 1)
+    {
+        flowCtrl=0;
+    }
     return ipmi::responseSuccess(flowCtrl);
 }
 #endif //CPU_DIAG_ENABLE
