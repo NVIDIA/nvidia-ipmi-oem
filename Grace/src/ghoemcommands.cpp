@@ -2367,7 +2367,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
         return ipmi::responseUnspecifiedError();
     }
     bool mode=std::get<bool>(diagMode);
-    return ipmi::responseSuccess(static_cast<uint8_t>(mode),majorVer,minorVer,patchVer);
+    return ipmi::responseSuccess(static_cast<uint8_t>(mode),OEM_DIAG_MAJOR_VER,OEM_DIAG_MINOR_VER,OEM_DIAG_PATCH_VER);
 }
 //setDiagSystemConfig
 ipmi::RspType<uint8_t>
