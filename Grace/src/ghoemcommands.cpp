@@ -2009,6 +2009,7 @@ static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio,
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Unable to open /sys/class/gpio/gpio886/direction");
+        close(fd);
         return ipmi::responseUnspecifiedError();
     }
 
@@ -2016,6 +2017,7 @@ static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio,
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error writing to /sys/class/gpio/gpio886/direction");
+        close(fd);
         return ipmi::responseUnspecifiedError();
     }
 
@@ -2026,6 +2028,7 @@ static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio,
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Unable to open /sys/class/gpio/gpio886/value");
+        close(fd);
         return ipmi::responseUnspecifiedError();
     }
 
@@ -2035,6 +2038,7 @@ static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio,
         {
             phosphor::logging::log<phosphor::logging::level::ERR>(
                 "Error writing to /sys/class/gpio/gpio886/value");
+            close(fd);
             return ipmi::responseUnspecifiedError();
         }
     }
@@ -2045,6 +2049,7 @@ static ipmi::RspType<> setGpioCmd(std::string gpiochip, uint32_t gpio,
         {
             phosphor::logging::log<phosphor::logging::level::ERR>(
                 "Error writing to /sys/class/gpio/gpio886/value");
+            close(fd);
             return ipmi::responseUnspecifiedError();
         }
     }
@@ -2064,6 +2069,7 @@ ipmi::RspType<> ipmiOemMiscSetWP(uint8_t type, uint8_t id, uint8_t value)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Unknown  device  for WP requested");
+        return ipmi::responseUnspecifiedError();
     }
 }
 
@@ -2078,6 +2084,7 @@ ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Unknown  device  for WP requested");
+        return ipmi::responseUnspecifiedError();
     }
 }
 
