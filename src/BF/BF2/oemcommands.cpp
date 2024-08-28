@@ -197,16 +197,6 @@ void registerNvOemPlatformFunctionsBF2()
                           ipmi::nvidia::app::cmdPowerCapMinGet,
                           ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
 
-    // < Power Cap Allocated Watts Get >
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsGet,
-                          ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapGet);
-
-    // < Power Cap Allocated Watts Set >
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsSet,
-                          ipmi::Privilege::sysIface, ipmi::ipmicmdPowerCapSet);
-
     // <ERoT Reset>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::CmdERoTReset,

@@ -86,10 +86,7 @@ const char* powerCapacitySrvice = "com.Nvidia.Powermanager";
 const char* powerCapacityInterface = "xyz.openbmc_project.Control.Power.Cap";
 const char* powerCapacityModeInterface =
     "xyz.openbmc_project.Control.Power.Mode";
-const char* powerSubsysObj = "/xyz/openbmc_project/control/host0/powercapacity";
-const char* powerSubsysSrvice = "xyz.openbmc_project.Settings";
-const char* powerSubsysInterface =
-    "xyz.openbmc_project.Control.PowerSubsystem.Capacity";
+
 // RsyslogFwd
 const char* rsyslogConfigService = "xyz.openbmc_project.Syslog.Config";
 const char* rsyslogLoggingConfigObjPath = "/xyz/openbmc_project/logging/config";
@@ -2208,20 +2205,6 @@ ipmi::RspType<uint32_t> ipmicmdPowerCapMinGet(ipmi::Context::ptr ctx)
                                      powerCapacityInterface);
 }
 
-ipmi::RspType<> ipmicmdPowerCapAllocatedWattsSet(ipmi::Context::ptr ctx,
-                                                 uint8_t parameter)
-{
-    return ipmicmdPowerCapGenericSet(ctx, "AllocatedWatts", parameter,
-                                     powerSubsysObj, powerSubsysSrvice,
-                                     powerSubsysInterface);
-}
-
-ipmi::RspType<uint32_t> ipmicmdPowerCapAllocatedWattsGet(ipmi::Context::ptr ctx)
-{
-    return ipmicmdPowerCapGenericGet(ctx, "AllocatedWatts", powerSubsysObj,
-                                     powerSubsysSrvice, powerSubsysInterface);
-}
-
 static ipmi::RspType<> ipmicmdPowerPowerCapSet(ipmi::Context::ptr ctx,
                                                uint8_t parameter)
 {
@@ -3344,18 +3327,6 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdPowerCapMinGet,
                           ipmi::Privilege::Admin, ipmi::ipmicmdPowerCapMinGet);
-
-    // < Power Cap Allocated Watts Get >
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsGet,
-                          ipmi::Privilege::Admin,
-                          ipmi::ipmicmdPowerCapAllocatedWattsGet);
-
-    // < Power Cap Allocated Watts Set >
-    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
-                          ipmi::nvidia::app::CmdPowerCapAllocatedWattsSet,
-                          ipmi::Privilege::sysIface,
-                          ipmi::ipmicmdPowerCapAllocatedWattsSet);
 
     // <ERoT Reset>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
