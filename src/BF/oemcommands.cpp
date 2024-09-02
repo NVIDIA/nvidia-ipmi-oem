@@ -124,6 +124,15 @@ static constexpr const char* biosConfigMgrIface =
     "xyz.openbmc_project.BIOSConfig.Manager";
 static constexpr const char* createUserMethod = "CreateUser";
 
+// Network object in dbus
+static constexpr const char* networkService = "xyz.openbmc_project.Network";
+static constexpr const char* networkObj = "/xyz/openbmc_project/network";
+static constexpr const char* networkResetIntf = "xyz.openbmc_project.Common.FactoryReset";
+
+// Software BMC Updater object in dbus
+static constexpr const char* sftBMCObj = "/xyz/openbmc_project/software";
+static constexpr const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
+
 static const std::vector<std::string> nicExternalHostPrivileges = {
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FLASH_ACCESS",
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FW_UPDATE",
@@ -1493,6 +1502,65 @@ static void SetBootstrapPassword(int index, std::string password)
     {
         ipmi::userDatabase[index].password = password;
     }
+}
+
+ipmi::RspType<> ipmiSystemFactoryResetBF(boost::asio::yield_context yield)
+{
+    /*
+     * BMC factory reset must be use to restore the BMC to its
+     * original manufacturer settings.
+     * IPMI performs below 2 steps:
+     * 1. The network factory reset, it overwrites the configuration
+     *    for all configured network interfaces to a DHCP setting.
+     * 2. The BMC software updater factory reset, it clears any
+     *    volumes and persistence files created by the BMC processes.
+     *    This reset occurs only on the next BMC reboot.
+     */
+
+    auto sdbusp = getSdBus();
+    boost::system::error_code ec;
+
+    // Network factory reset
+    try
+    {
+        sdbusp->yield_method_call<void>(yield, ec, networkService, networkObj,
+                                        networkResetIntf, "Reset");
+        if (ec)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Unspecified Error on network reset");
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    // BMC software updater factory reset
+    try
+    {
+#ifdef BF3-OEM-COMMANDS
+        std::string sftBMCService = "xyz.openbmc_project.Software.BMC.Inventory";
+#else
+        std::string sftBMCService = "xyz.openbmc_project.Software.BMC.Updater";
+#endif
+
+        sdbusp->yield_method_call<void>(yield, ec, sftBMCService, sftBMCObj,
+                                        sftBMCResetIntf, "Reset");
+        if (ec)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Unspecified Error on BMC software reset");
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess();
 }
 
 static ipmi::RspType<>
@@ -3249,6 +3317,11 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
                           ipmi::nvidia::app::cmdBIOSMode,
                           ipmi::Privilege::Admin, ipmi::ipmicmdBIOSMode);
+
+    // <BMC Factory Reset>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSystemFactoryReset,
+                          ipmi::Privilege::Admin, ipmi::ipmiSystemFactoryResetBF);
 
     return;
 }

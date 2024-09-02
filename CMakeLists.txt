@@ -181,6 +181,10 @@ if(bf3-chassis-commands)
     add_definitions (-DBF3_CHASSIS_COMMAND)
 endif()
 
+if(BF3-OEM-COMMANDS)
+    add_definitions (-DBF3-OEM-COMMANDS)
+endif()
+
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (znvipmioemcmds PROPERTIES SOVERSION "0")
 target_link_libraries (znvipmioemcmds stdc++fs)
