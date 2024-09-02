@@ -42,6 +42,7 @@
 #include <boost/process.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/message.hpp>
+#include <ipmid/utils.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/message/types.hpp>
 #include <sdbusplus/timer.hpp>
@@ -518,6 +519,26 @@ ipmi::RspType<uint8_t>
             "GWPfru : Operation is not possble FRU is Write protected");
         return ipmi::responseCommandDisabled();
     }
+
+#else
+
+#ifdef CHASSIS_WRITE_PROTECT
+    auto writeprotectService =
+        ipmi::getService(*getSdBus(), "xyz.openbmc_project.Software.Settings",
+                         std::string("/xyz/openbmc_project/software/") +
+                             STR(CHASSIS_WRITE_PROTECT));
+    auto value = ipmi::getDbusProperty(
+        *getSdBus(), writeprotectService,
+        std::string("/xyz/openbmc_project/software/") +
+            STR(CHASSIS_WRITE_PROTECT),
+        "xyz.openbmc_project.Software.Settings", "WriteProtected");
+    if (std::get<bool>(value) == true)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "GWPfru : FRU is write protected");
+        return ipmi::responseCommandDisabled();
+    }
+#endif
 
 #endif
 

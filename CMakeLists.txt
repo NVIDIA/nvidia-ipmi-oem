@@ -32,6 +32,10 @@ option (disable-smbpbi-passthru
         "To disable SMBPBI passthru commands"
         OFF)
 
+if(chassis-write-protect)
+    add_compile_definitions(CHASSIS_WRITE_PROTECT=${chassis-write-protect})
+endif()
+
 #[[Optional support for Global Write-Protect FRU Edit Protection]]
 
 if(WP-GPIO AND WP-GPIO-CHIP)

@@ -79,6 +79,12 @@ const char* selLogIntf = "xyz.openbmc_project.Logging.Settings";
 const char* pldmPollingObj = "/xyz/openbmc_project/pldm/sensor_polling";
 const char* pldmPollingIntf = "xyz.openbmc_project.Object.Enable";
 
+// Write Protect policy in dbus
+const std::string chassisWriteProtectObj =
+    std::string("/xyz/openbmc_project/software/") + STR(CHASSIS_WRITE_PROTECT);
+const std::string chassisWriteProtectIntf =
+    "xyz.openbmc_project.Software.Settings";
+
 // Network object in dbus
 static constexpr auto networkServiceName = "xyz.openbmc_project.Network";
 static constexpr auto networkConfigObj = "/xyz/openbmc_project/network/config";
@@ -2063,7 +2069,25 @@ ipmi::RspType<> ipmiOemMiscSetWP(uint8_t type, uint8_t id, uint8_t value)
     using namespace ipmi::nvidia::misc;
     if (type == getWPType)
     {
+#ifdef CHASSIS_WRITE_PROTECT
+        try
+        {
+            auto writeprotectService = ipmi::getService(
+                *getSdBus(), chassisWriteProtectIntf, chassisWriteProtectObj);
+            ipmi::setDbusProperty(
+                *getSdBus(), writeprotectService, chassisWriteProtectObj,
+                chassisWriteProtectIntf, "WriteProtected", bool(value));
+        }
+        catch (const std::exception& e)
+        {
+            log<level::ERR>(e.what());
+            return ipmi::responseUnspecifiedError();
+        }
+        return ipmi::responseSuccess();
+#else
+
         return setGpioCmd(nvidia::GWpGpioChip, nvidia::GWpGpioId, value);
+#endif
     }
     else
     {
@@ -2078,7 +2102,24 @@ ipmi::RspType<uint8_t> ipmiOemMiscGetWP(uint8_t type, uint8_t id)
     using namespace ipmi::nvidia::misc;
     if (type == getWPType)
     {
+#ifdef CHASSIS_WRITE_PROTECT
+        try
+        {
+            auto writeprotectService = ipmi::getService(
+                *getSdBus(), chassisWriteProtectIntf, chassisWriteProtectObj);
+            auto value = ipmi::getDbusProperty(
+                *getSdBus(), writeprotectService, chassisWriteProtectObj,
+                chassisWriteProtectIntf, "WriteProtected");
+            return ipmi::responseSuccess(std::get<bool>(value));
+        }
+        catch (std::exception& e)
+        {
+            log<level::ERR>(e.what());
+            return ipmi::responseUnspecifiedError();
+        }
+#else
         return getGpioCmd(nvidia::GWpGpioChip, nvidia::GWpGpioId);
+#endif
     }
     else
     {
