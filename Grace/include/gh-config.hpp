@@ -86,8 +86,8 @@ constexpr auto GWpGpioId = 70;
 constexpr auto GWpGpioChip = "gpiochip816";
 
 #ifdef CPU_DIAG_ENABLE
-constexpr auto diagServiceList            = "diag-flow-ctrl.timer "
-	                                    "diag-flow-ctrl.service";
+constexpr auto diagServiceList            = "cpu-diag-status.timer"
+	                                    "cpu-diag-status.service";
 #endif
 
 } // namespace nvidia
