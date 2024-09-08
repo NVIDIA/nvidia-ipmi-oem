@@ -568,59 +568,18 @@ static bool getGpioRawLF(uint32_t gpio, uint8_t& v)
     return true;
 }
 
-static void cleanGpio()
-{
-    if (!setGpioRawLF(nvidia::socRstGpio, ipmi::nvidia::gpioHigh) ||
-        !setGpioRawLF(nvidia::preRstGpio, ipmi::nvidia::gpioHigh) ||
-        !setGpioRawLF(nvidia::liveFishGpio, ipmi::nvidia::gpioHigh))
-    {
-        phosphor::logging::log<level::ERR>(
-            "unable to restore gpios to default");
-    }
-    else
-    {
-        phosphor::logging::log<level::NOTICE>("restored gpios to default (1)");
-    }
-    return;
-}
-
-static bool changeSocRstAndPreRstGpios(uint32_t value)
-{
-    if (!setGpioRawLF(nvidia::preRstGpio, value))
-    {
-        phosphor::logging::log<level::ERR>("failed to write to PRE_RESET gpio");
-        cleanGpio();
-        return false;
-    }
-
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(ipmi::nvidia::resetPause));
-
-    if (!setGpioRawLF(nvidia::socRstGpio, value))
-    {
-        phosphor::logging::log<level::ERR>("failed to write to SOC_RESET gpio");
-        cleanGpio();
-        return false;
-    }
-    return true;
-}
-
 static bool DPUHardRST()
 {
-    if (!changeSocRstAndPreRstGpios(ipmi::nvidia::gpioLow))
+    int response;
+    response = executeCmd("/usr/sbin/mlnx_bf_reset_control",
+                            "soc_hard_reset_ignore_host");
+    if (response)
     {
-        phosphor::logging::log<level::ERR>(
-            "SOC_HARD_RST Command failed, can't change GPIO's to 0");
+        log<level::ERR>("Reset Command failed.",
+                        phosphor::logging::entry("rc= %d", response));
         return false;
     }
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(ipmi::nvidia::resetPause));
-    if (!changeSocRstAndPreRstGpios(ipmi::nvidia::gpioHigh))
-    {
-        phosphor::logging::log<level::ERR>(
-            "SOC_HARD_RST Command failed, can't return GPIO's to 1");
-        return false;
-    }
+
     std::cout << "soc_hard_rst is being done " << std::endl;
     return true;
 }
