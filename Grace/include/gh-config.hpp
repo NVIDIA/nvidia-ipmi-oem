@@ -86,18 +86,17 @@ constexpr auto GWpGpioId = 70;
 constexpr auto GWpGpioChip = "gpiochip816";
 
 #ifdef CPU_DIAG_ENABLE
-constexpr auto diagServiceList            = "cpu-diag-status.timer"
-	                                    "cpu-diag-status.service";
+constexpr auto diagServiceList = "cpu-diag-status.timer"
+                                 "cpu-diag-status.service";
 #endif
 
 } // namespace nvidia
 } // namespace ipmi
 
-//CPU Diag dbus object and interface
+// CPU Diag dbus object and interface
 #ifdef CPU_DIAG_ENABLE
 constexpr auto diagService = "xyz.openbmc_project.Settings";
 constexpr auto diagServiceObj = "/xyz/openbmc_project/Control/Diag";
 constexpr auto diagIntf = "xyz.openbmc_project.Control.Diag";
 constexpr auto dbusPropertyInterface = "org.freedesktop.DBus.Properties";
 #endif
-

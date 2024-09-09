@@ -108,24 +108,24 @@ static sdbusplus::bus::match::match sensorAdded(
     "type='signal',member='InterfacesAdded',arg0path='/xyz/openbmc_project/"
     "sensors/'",
     [](sdbusplus::message::message& m) {
-        sensorTree.clear();
-        sensorDataRecords.clear();
-        sdrLastAdd = std::chrono::duration_cast<std::chrono::seconds>(
-                         std::chrono::system_clock::now().time_since_epoch())
-                         .count();
-    });
+    sensorTree.clear();
+    sensorDataRecords.clear();
+    sdrLastAdd = std::chrono::duration_cast<std::chrono::seconds>(
+                     std::chrono::system_clock::now().time_since_epoch())
+                     .count();
+});
 
 static sdbusplus::bus::match::match sensorRemoved(
     *getSdBus(),
     "type='signal',member='InterfacesRemoved',arg0path='/xyz/openbmc_project/"
     "sensors/'",
     [](sdbusplus::message::message& m) {
-        sensorTree.clear();
-        sensorDataRecords.clear();
-        sdrLastRemove = std::chrono::duration_cast<std::chrono::seconds>(
-                            std::chrono::system_clock::now().time_since_epoch())
-                            .count();
-    });
+    sensorTree.clear();
+    sensorDataRecords.clear();
+    sdrLastRemove = std::chrono::duration_cast<std::chrono::seconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count();
+});
 
 // this keeps track of deassertions for sensor event status command. A
 // deasertion can only happen if an assertion was seen first.
@@ -138,44 +138,42 @@ static sdbusplus::bus::match::match thresholdChanged(
     "type='signal',member='PropertiesChanged',interface='org.freedesktop.DBus."
     "Properties',arg0namespace='xyz.openbmc_project.Sensor.Threshold'",
     [](sdbusplus::message::message& m) {
-        boost::container::flat_map<std::string, std::variant<bool, double>>
-            values;
-        m.read(std::string(), values);
+    boost::container::flat_map<std::string, std::variant<bool, double>> values;
+    m.read(std::string(), values);
 
-        auto findAssert = std::find_if(values.begin(), values.end(),
-                                       [](const auto& pair) {
-            return pair.first.find("Alarm") != std::string::npos;
-        });
-        if (findAssert != values.end())
+    auto findAssert = std::find_if(values.begin(), values.end(),
+                                   [](const auto& pair) {
+        return pair.first.find("Alarm") != std::string::npos;
+    });
+    if (findAssert != values.end())
+    {
+        auto ptr = std::get_if<bool>(&(findAssert->second));
+        if (ptr == nullptr)
         {
-            auto ptr = std::get_if<bool>(&(findAssert->second));
-            if (ptr == nullptr)
-            {
-                phosphor::logging::log<phosphor::logging::level::ERR>(
-                    "thresholdChanged: Assert non bool");
-                return;
-            }
-            if (*ptr)
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "thresholdChanged: Assert non bool");
+            return;
+        }
+        if (*ptr)
+        {
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "thresholdChanged: Assert",
+                phosphor::logging::entry("SENSOR=%s", m.get_path()));
+            thresholdDeassertMap[m.get_path()][findAssert->first] = *ptr;
+        }
+        else
+        {
+            auto& value = thresholdDeassertMap[m.get_path()][findAssert->first];
+            if (value)
             {
                 phosphor::logging::log<phosphor::logging::level::INFO>(
-                    "thresholdChanged: Assert",
+                    "thresholdChanged: deassert",
                     phosphor::logging::entry("SENSOR=%s", m.get_path()));
-                thresholdDeassertMap[m.get_path()][findAssert->first] = *ptr;
-            }
-            else
-            {
-                auto& value =
-                    thresholdDeassertMap[m.get_path()][findAssert->first];
-                if (value)
-                {
-                    phosphor::logging::log<phosphor::logging::level::INFO>(
-                        "thresholdChanged: deassert",
-                        phosphor::logging::entry("SENSOR=%s", m.get_path()));
-                    value = *ptr;
-                }
+                value = *ptr;
             }
         }
-    });
+    }
+});
 
 static void getSensorMaxMin(const SensorMap& sensorMap, double& max,
                             double& min)

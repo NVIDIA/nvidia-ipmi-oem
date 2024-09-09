@@ -458,11 +458,10 @@ ipmi::RspType<uint8_t> ipmiSetFanZonePWMDuty(uint8_t zone, uint8_t pwm,
                                              uint8_t request)
 {
 #ifdef GB200_FAN_ENABLE
-    std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
-                                       nvidia::fanZoneCtrlName1,
-                                       nvidia::fanZoneCtrlName2,
-                                       nvidia::fanZoneCtrlName3,
-                                       nvidia::fanZoneCtrlName4};
+    std::string fanZoneHwMonNames[] = {
+        nvidia::fanZoneCtrlName0, nvidia::fanZoneCtrlName1,
+        nvidia::fanZoneCtrlName2, nvidia::fanZoneCtrlName3,
+        nvidia::fanZoneCtrlName4};
 #else
     std::string fanZoneHwMonNames[] = {nvidia::fanZoneCtrlName0,
                                        nvidia::fanZoneCtrlName1,
@@ -1767,7 +1766,8 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                             "failed");
                         return;
                     }
-                }, service.c_str(),
+                },
+                    service.c_str(),
                     std::string(userMgrObjBasePath)
                         .append("/")
                         .append(userName),
@@ -2215,11 +2215,10 @@ ipmi::RspType<uint8_t> ipmiStandbyPowerCycle()
     return ipmi::response(ipmi::ccSuccess);
 }
 #ifdef CPU_DIAG_ENABLE
-//setDiag
-ipmi::RspType<uint8_t>
-    setDiag(ipmi::Context::ptr ctx,uint8_t mode)
+// setDiag
+ipmi::RspType<uint8_t> setDiag(ipmi::Context::ptr ctx, uint8_t mode)
 {
-    std::variant<bool>diagMode = static_cast<bool>(mode);
+    std::variant<bool> diagMode = static_cast<bool>(mode);
     std::string startupDiagTimerString = "systemctl start ";
     std::string stopDiagTimerString = "systemctl stop ";
     startupDiagTimerString += nvidia::diagServiceList;
@@ -2227,8 +2226,7 @@ ipmi::RspType<uint8_t>
 
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Set");
         method.append(diagIntf, "DiagMode", diagMode);
         auto reply = ctx->bus->call(method);
@@ -2237,17 +2235,15 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiag: Set Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
 
-        if(mode == 0)
+        if (mode == 0)
         {
             std::string diagSysConfigString = R"([])";
-            auto method1 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
+            auto method1 = ctx->bus->new_method_call(
+                diagService, diagServiceObj, dbusPropertyInterface, "Set");
             std::variant<std::string> variantDiagSysData = diagSysConfigString;
             method1.append(diagIntf, "DiagSystemConfig", variantDiagSysData);
             auto reply1 = ctx->bus->call(method1);
@@ -2256,15 +2252,13 @@ ipmi::RspType<uint8_t>
                 phosphor::logging::log<level::ERR>(
                     "DiagSystemConfig: Set Dbus method returned "
                     "error",
-                    phosphor::logging::entry("SERVICE=%s",
-                                             diagService));
+                    phosphor::logging::entry("SERVICE=%s", diagService));
                 return ipmi::responseUnspecifiedError();
             }
 
             std::string configString = R"([])";
-            auto method2 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
+            auto method2 = ctx->bus->new_method_call(
+                diagService, diagServiceObj, dbusPropertyInterface, "Set");
             std::variant<std::string> variantData = configString;
             method2.append(diagIntf, "DiagConfig", variantData);
             auto reply2 = ctx->bus->call(method2);
@@ -2273,15 +2267,13 @@ ipmi::RspType<uint8_t>
                 phosphor::logging::log<level::ERR>(
                     "DiagConfig: Set Dbus method returned "
                     "error",
-                    phosphor::logging::entry("SERVICE=%s",
-                                             diagService));
+                    phosphor::logging::entry("SERVICE=%s", diagService));
                 return ipmi::responseUnspecifiedError();
             }
 
             std::string resultString = R"([])";
-            auto method3 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
+            auto method3 = ctx->bus->new_method_call(
+                diagService, diagServiceObj, dbusPropertyInterface, "Set");
             std::variant<std::string> variantResultData = resultString;
             method3.append(diagIntf, "DiagResult", variantResultData);
             auto reply3 = ctx->bus->call(method3);
@@ -2290,17 +2282,15 @@ ipmi::RspType<uint8_t>
                 phosphor::logging::log<level::ERR>(
                     "DiagResult: Set Dbus method returned "
                     "error",
-                    phosphor::logging::entry("SERVICE=%s",
-                                             diagService));
+                    phosphor::logging::entry("SERVICE=%s", diagService));
                 return ipmi::responseUnspecifiedError();
             }
 
-            //Set Diag Status to not started
-	    std::uint8_t flowCtrl = 4;
-            auto method4 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
-	    std::variant<uint8_t>varFlowCtrl = flowCtrl;
+            // Set Diag Status to not started
+            std::uint8_t flowCtrl = 4;
+            auto method4 = ctx->bus->new_method_call(
+                diagService, diagServiceObj, dbusPropertyInterface, "Set");
+            std::variant<uint8_t> varFlowCtrl = flowCtrl;
             method4.append(diagIntf, "DiagStatus", varFlowCtrl);
             auto reply4 = ctx->bus->call(method4);
             if (reply4.is_method_error())
@@ -2308,8 +2298,7 @@ ipmi::RspType<uint8_t>
                 phosphor::logging::log<level::ERR>(
                     "DiagStatus: Set Dbus method returned "
                     "error",
-                    phosphor::logging::entry("SERVICE=%s",
-                                             diagService));
+                    phosphor::logging::entry("SERVICE=%s", diagService));
                 return ipmi::responseUnspecifiedError();
             }
 
@@ -2321,7 +2310,7 @@ ipmi::RspType<uint8_t>
                 return ipmi::responseResponseError();
             }
         }
-        else if(mode == 1)
+        else if (mode == 1)
         {
             auto r = system(startupDiagTimerString.c_str());
             if (r != 0)
@@ -2333,9 +2322,8 @@ ipmi::RspType<uint8_t>
         }
         else
         {
-                phosphor::logging::log<level::ERR>(
-                    "Invalid Mode");
-                return ipmi::responseResponseError();
+            phosphor::logging::log<level::ERR>("Invalid Mode");
+            return ipmi::responseResponseError();
         }
     }
     catch (const std::exception& e)
@@ -2345,15 +2333,15 @@ ipmi::RspType<uint8_t>
     }
     return ipmi::responseSuccess(ccSuccess);
 }
-//getDiag
-ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
-    getDiag(ipmi::Context::ptr ctx,uint8_t majorVer,uint8_t minorVer,uint8_t patchVer)
+// getDiag
+ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t>
+    getDiag(ipmi::Context::ptr ctx, uint8_t majorVer, uint8_t minorVer,
+            uint8_t patchVer)
 {
-    std::variant<bool>diagMode;
+    std::variant<bool> diagMode;
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagMode");
         auto reply = ctx->bus->call(method);
@@ -2362,8 +2350,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
             phosphor::logging::log<level::ERR>(
                 "getDiag: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(diagMode);
@@ -2373,26 +2360,28 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t>
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    bool mode=std::get<bool>(diagMode);
-    return ipmi::responseSuccess(static_cast<uint8_t>(mode),OEM_DIAG_MAJOR_VER,OEM_DIAG_MINOR_VER,OEM_DIAG_PATCH_VER);
+    bool mode = std::get<bool>(diagMode);
+    return ipmi::responseSuccess(static_cast<uint8_t>(mode), OEM_DIAG_MAJOR_VER,
+                                 OEM_DIAG_MINOR_VER, OEM_DIAG_PATCH_VER);
 }
-//setDiagSystemConfig
-ipmi::RspType<uint8_t>
-    setDiagSystemConfig(ipmi::Context::ptr ctx,uint8_t configType,uint8_t testDuration,std::vector<uint8_t> dynamicData)
+// setDiagSystemConfig
+ipmi::RspType<uint8_t> setDiagSystemConfig(ipmi::Context::ptr ctx,
+                                           uint8_t configType,
+                                           uint8_t testDuration,
+                                           std::vector<uint8_t> dynamicData)
 {
     std::variant<std::string> variantData;
     std::string jsonValue;
-    bool found=false;
+    bool found = false;
 
-    if((configType > 1) || (dynamicData.empty()))
+    if ((configType > 1) || (dynamicData.empty()))
     {
         phosphor::logging::log<level::ERR>("Invalid ConfigType");
         return ipmi::responseUnspecifiedError();
     }
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagSystemConfig");
         auto reply = ctx->bus->call(method);
@@ -2401,16 +2390,15 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagSystemConfig: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(variantData);
         jsonValue = std::get<std::string>(variantData);
         auto j = json::parse(jsonValue);
-        for(auto& item : j)
+        for (auto& item : j)
         {
-            if(item["ConfigType"] == configType)
+            if (item["ConfigType"] == configType)
             {
                 item["TestDuration"] = testDuration;
                 item["DynamicData"] = dynamicData;
@@ -2418,14 +2406,15 @@ ipmi::RspType<uint8_t>
                 break;
             }
         }
-        if(!found)
+        if (!found)
         {
-           j.push_back({{"ConfigType",configType},{"TestDuration",testDuration},{"DynamicData",dynamicData}});
+            j.push_back({{"ConfigType", configType},
+                         {"TestDuration", testDuration},
+                         {"DynamicData", dynamicData}});
         }
         std::string jsonString = j.dump();
-        auto method1 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
+        auto method1 = ctx->bus->new_method_call(diagService, diagServiceObj,
+                                                 dbusPropertyInterface, "Set");
         std::variant<std::string> variantData = jsonString;
         method1.append(diagIntf, "DiagSystemConfig", variantData);
         auto reply1 = ctx->bus->call(method1);
@@ -2434,35 +2423,31 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagSystemConfig: Set Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
-
     }
     catch (const std::exception& e)
     {
-
         log<level::ERR>(e.what());
-          return ipmi::responseUnspecifiedError();
+        return ipmi::responseUnspecifiedError();
     }
     return ipmi::responseSuccess(ccSuccess);
 }
-//getDiagSystemConfig
-ipmi::RspType<uint8_t,std::vector<uint8_t>>
-    getDiagSystemConfig(ipmi::Context::ptr ctx,uint8_t configType)
+// getDiagSystemConfig
+ipmi::RspType<uint8_t, std::vector<uint8_t>>
+    getDiagSystemConfig(ipmi::Context::ptr ctx, uint8_t configType)
 {
     std::string jsonValue;
     std::variant<std::string> variantData;
-    std::vector<uint8_t>value;
-    std::vector<uint8_t>paddingValue(199,0);
+    std::vector<uint8_t> value;
+    std::vector<uint8_t> paddingValue(199, 0);
     std::uint8_t testDuration;
-    bool found=false;
+    bool found = false;
 
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagSystemConfig");
         auto reply = ctx->bus->call(method);
@@ -2471,8 +2456,7 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
             phosphor::logging::log<level::ERR>(
                 "getDiagSystemConfig: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(variantData);
@@ -2481,55 +2465,58 @@ ipmi::RspType<uint8_t,std::vector<uint8_t>>
 
         for (auto& item : j)
         {
-            if(item["ConfigType"] == configType)
+            if (item["ConfigType"] == configType)
             {
                 testDuration = item["TestDuration"].get<uint8_t>();
                 value = item["DynamicData"].get<std::vector<uint8_t>>();
-		//Host accept the fix size packet of 200 bytes
-                size_t numValuesToCopy = std::min(value.size(),paddingValue.size());
-                std::copy_n(value.begin(),numValuesToCopy,paddingValue.begin());
+                // Host accept the fix size packet of 200 bytes
+                size_t numValuesToCopy = std::min(value.size(),
+                                                  paddingValue.size());
+                std::copy_n(value.begin(), numValuesToCopy,
+                            paddingValue.begin());
                 found = true;
-		break;
+                break;
             }
         }
-        if(found == false)
+        if (found == false)
         {
-
             phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid Config Type");
+                "Invalid Config Type");
             return ipmi::responseResponseError();
         }
-
     }
     catch (const std::exception& e)
     {
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    return ipmi::responseSuccess(testDuration,paddingValue);
+    return ipmi::responseSuccess(testDuration, paddingValue);
 }
 
-//setDiagTidConfig
-ipmi::RspType<uint8_t>
-    setDiagTidConfig(ipmi::Context::ptr ctx,uint8_t tid,uint8_t testDuration,uint8_t loopsMsb,uint8_t loopsLsb,uint8_t logLevel,uint8_t dynamicDataSize,std::vector<uint8_t> dynamicData)
+// setDiagTidConfig
+ipmi::RspType<uint8_t> setDiagTidConfig(ipmi::Context::ptr ctx, uint8_t tid,
+                                        uint8_t testDuration, uint8_t loopsMsb,
+                                        uint8_t loopsLsb, uint8_t logLevel,
+                                        uint8_t dynamicDataSize,
+                                        std::vector<uint8_t> dynamicData)
 {
     std::variant<std::string> variantData;
     std::string jsonValue;
-    bool found=false;
+    bool found = false;
     uint16_t loopValue;
 
     loopValue = static_cast<uint16_t>(loopsMsb << 8);
     loopValue |= static_cast<uint16_t>(loopsLsb);
 
-    if(dynamicData.empty() ||(dynamicDataSize > 194) || (dynamicDataSize != dynamicData.size()))
+    if (dynamicData.empty() || (dynamicDataSize > 194) ||
+        (dynamicDataSize != dynamicData.size()))
     {
         phosphor::logging::log<level::ERR>("Invalid DynamicData");
         return ipmi::responseUnspecifiedError();
     }
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagConfig");
         auto reply = ctx->bus->call(method);
@@ -2538,16 +2525,15 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagTidConfig: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(variantData);
         jsonValue = std::get<std::string>(variantData);
         auto j = json::parse(jsonValue);
-        for(auto& item : j)
+        for (auto& item : j)
         {
-            if(item["Tid"] == tid)
+            if (item["Tid"] == tid)
             {
                 item["TestDuration"] = testDuration;
                 item["Loops"] = loopValue;
@@ -2558,14 +2544,18 @@ ipmi::RspType<uint8_t>
                 break;
             }
         }
-        if(!found)
+        if (!found)
         {
-           j.push_back({{"Tid",tid},{"TestDuration",testDuration},{"Loops",loopValue},{"LogLevel",logLevel},{"DynamicDataSize",dynamicDataSize},{"DynamicData",dynamicData}});
+            j.push_back({{"Tid", tid},
+                         {"TestDuration", testDuration},
+                         {"Loops", loopValue},
+                         {"LogLevel", logLevel},
+                         {"DynamicDataSize", dynamicDataSize},
+                         {"DynamicData", dynamicData}});
         }
         std::string jsonString = j.dump();
-        auto method1 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
+        auto method1 = ctx->bus->new_method_call(diagService, diagServiceObj,
+                                                 dbusPropertyInterface, "Set");
         std::variant<std::string> variantData = jsonString;
         method1.append(diagIntf, "DiagConfig", variantData);
         auto reply1 = ctx->bus->call(method1);
@@ -2574,41 +2564,38 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagTidConfig: Set Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
-
     }
     catch (const std::exception& e)
     {
-
         log<level::ERR>(e.what());
-          return ipmi::responseUnspecifiedError();
+        return ipmi::responseUnspecifiedError();
     }
     return ipmi::responseSuccess(ccSuccess);
 }
 
-//getDiagTidConfig
-ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
-    getDiagTidConfig(ipmi::Context::ptr ctx,uint8_t tid)
+// getDiagTidConfig
+ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
+              std::vector<uint8_t>>
+    getDiagTidConfig(ipmi::Context::ptr ctx, uint8_t tid)
 {
     std::string jsonValue;
     std::variant<std::string> variantData;
-    std::vector<uint8_t>dynamicData;
-    std::vector<uint8_t>paddingValue(194,0);
+    std::vector<uint8_t> dynamicData;
+    std::vector<uint8_t> paddingValue(194, 0);
     std::uint8_t testDuration;
     std::uint8_t loopMsb;
     std::uint8_t loopLsb;
     std::uint8_t logLevel;
     std::uint8_t dynamicDataSize;
     std::uint16_t loops;
-    bool found=false;
+    bool found = false;
 
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagConfig");
         auto reply = ctx->bus->call(method);
@@ -2617,8 +2604,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_
             phosphor::logging::log<level::ERR>(
                 "getDiagTidConfig: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(variantData);
@@ -2627,28 +2613,28 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_
 
         for (auto& item : j)
         {
-            if(item["Tid"] == tid)
+            if (item["Tid"] == tid)
             {
                 testDuration = item["TestDuration"].get<uint8_t>();
                 loops = item["Loops"].get<uint16_t>();
                 logLevel = item["LogLevel"].get<uint8_t>();
                 dynamicDataSize = item["DynamicDataSize"].get<uint8_t>();
                 dynamicData = item["DynamicData"].get<std::vector<uint8_t>>();
-		//Host accept the fix size packet of 200 bytes
-                size_t numValuesToCopy = std::min(dynamicData.size(),paddingValue.size());
-                std::copy_n(dynamicData.begin(),numValuesToCopy,paddingValue.begin());
+                // Host accept the fix size packet of 200 bytes
+                size_t numValuesToCopy = std::min(dynamicData.size(),
+                                                  paddingValue.size());
+                std::copy_n(dynamicData.begin(), numValuesToCopy,
+                            paddingValue.begin());
                 found = true;
                 break;
             }
         }
-        if(found == false)
+        if (found == false)
         {
-
             phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid TID");
+                "Invalid TID");
             return ipmi::responseResponseError();
         }
-
     }
     catch (const std::exception& e)
     {
@@ -2657,29 +2643,31 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,uint8_t,std::vector<uint8_
     }
     loopLsb = static_cast<uint8_t>(loops & 0xFF);
     loopMsb = static_cast<uint8_t>((loops >> 8) & 0xFF);
-    return ipmi::responseSuccess(tid,testDuration,loopMsb,loopLsb,logLevel,dynamicDataSize,paddingValue);
+    return ipmi::responseSuccess(tid, testDuration, loopMsb, loopLsb, logLevel,
+                                 dynamicDataSize, paddingValue);
 }
-//setDiagResult
-ipmi::RspType<uint8_t>
-    setDiagResult(ipmi::Context::ptr ctx,uint8_t tid,uint8_t resultMsb,uint8_t resultLsb,uint8_t resultMaskSize,std::vector<uint8_t> resultMask)
+// setDiagResult
+ipmi::RspType<uint8_t> setDiagResult(ipmi::Context::ptr ctx, uint8_t tid,
+                                     uint8_t resultMsb, uint8_t resultLsb,
+                                     uint8_t resultMaskSize,
+                                     std::vector<uint8_t> resultMask)
 {
     std::variant<std::string> variantData;
     std::string jsonValue;
-    bool found=false;
+    bool found = false;
     uint16_t resultValue;
 
     resultValue = static_cast<uint16_t>(resultMsb << 8);
     resultValue |= static_cast<uint16_t>(resultLsb);
 
-    if(resultMaskSize > 196)
+    if (resultMaskSize > 196)
     {
         phosphor::logging::log<level::ERR>("Invalid ResultMask");
         return ipmi::responseUnspecifiedError();
     }
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagResult");
         auto reply = ctx->bus->call(method);
@@ -2688,16 +2676,15 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagResult: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(variantData);
         jsonValue = std::get<std::string>(variantData);
         auto j = json::parse(jsonValue);
-        for(auto& item : j)
+        for (auto& item : j)
         {
-            if(item["Tid"] == tid)
+            if (item["Tid"] == tid)
             {
                 item["Result"] = resultValue;
                 item["ResultMaskSize"] = resultMaskSize;
@@ -2706,15 +2693,17 @@ ipmi::RspType<uint8_t>
                 break;
             }
         }
-        if(!found)
+        if (!found)
         {
-           j.push_back({{"Tid",tid},{"Result",resultValue},{"ResultMaskSize",resultMaskSize},{"ResultMask",resultMask}});
+            j.push_back({{"Tid", tid},
+                         {"Result", resultValue},
+                         {"ResultMaskSize", resultMaskSize},
+                         {"ResultMask", resultMask}});
         }
         std::string jsonString = j.dump();
 
-        auto method1 = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
-                                                dbusPropertyInterface, "Set");
+        auto method1 = ctx->bus->new_method_call(diagService, diagServiceObj,
+                                                 dbusPropertyInterface, "Set");
         std::variant<std::string> variantData = jsonString;
         method1.append(diagIntf, "DiagResult", variantData);
         auto reply1 = ctx->bus->call(method1);
@@ -2723,36 +2712,32 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagResult: Set Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
-
     }
     catch (const std::exception& e)
     {
-
         log<level::ERR>(e.what());
-          return ipmi::responseUnspecifiedError();
+        return ipmi::responseUnspecifiedError();
     }
     return ipmi::responseSuccess(ccSuccess);
 }
-ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
-    getDiagResult(ipmi::Context::ptr ctx,uint8_t tid)
+ipmi::RspType<uint8_t, uint8_t, uint8_t, std::vector<uint8_t>>
+    getDiagResult(ipmi::Context::ptr ctx, uint8_t tid)
 {
     std::string jsonValue;
     std::variant<std::string> variantData;
-    std::vector<uint8_t>value;
+    std::vector<uint8_t> value;
     std::uint8_t resultMsb;
     std::uint8_t resultLsb;
     std::uint8_t resultMaskSize;
     std::uint16_t resultValue;
-    bool found=false;
+    bool found = false;
 
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagResult");
         auto reply = ctx->bus->call(method);
@@ -2761,8 +2746,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
             phosphor::logging::log<level::ERR>(
                 "getDiagResult: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(variantData);
@@ -2771,7 +2755,7 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
 
         for (auto& item : j)
         {
-            if(item["Tid"] == tid)
+            if (item["Tid"] == tid)
             {
                 resultValue = item["Result"].get<uint16_t>();
                 resultMaskSize = item["ResultMaskSize"].get<uint8_t>();
@@ -2780,14 +2764,12 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
                 break;
             }
         }
-        if(found == false)
+        if (found == false)
         {
-
             phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid TID");
+                "Invalid TID");
             return ipmi::responseResponseError();
         }
-
     }
     catch (const std::exception& e)
     {
@@ -2797,17 +2779,15 @@ ipmi::RspType<uint8_t,uint8_t,uint8_t,std::vector<uint8_t>>
 
     resultLsb = static_cast<uint8_t>(resultValue & 0xFF);
     resultMsb = static_cast<uint8_t>((resultValue >> 8) & 0xFF);
-    return ipmi::responseSuccess(resultMsb,resultLsb,resultMaskSize,value);
+    return ipmi::responseSuccess(resultMsb, resultLsb, resultMaskSize, value);
 }
-//setDiagFlowCtrl
-ipmi::RspType<uint8_t>
-    setDiagFlowCtrl(ipmi::Context::ptr ctx,uint8_t flowCtrl)
+// setDiagFlowCtrl
+ipmi::RspType<uint8_t> setDiagFlowCtrl(ipmi::Context::ptr ctx, uint8_t flowCtrl)
 {
-    std::variant<uint8_t>varFlowCtrl = flowCtrl;
+    std::variant<uint8_t> varFlowCtrl = flowCtrl;
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Set");
         method.append(diagIntf, "DiagStatus", varFlowCtrl);
         auto reply = ctx->bus->call(method);
@@ -2816,8 +2796,7 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "setDiagFlowCtrl: Set Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
     }
@@ -2828,15 +2807,13 @@ ipmi::RspType<uint8_t>
     }
     return ipmi::responseSuccess(ccSuccess);
 }
-//getDiagFlowCtrl
-ipmi::RspType<uint8_t>
-    getDiagFlowCtrl(ipmi::Context::ptr ctx)
+// getDiagFlowCtrl
+ipmi::RspType<uint8_t> getDiagFlowCtrl(ipmi::Context::ptr ctx)
 {
-    std::variant<uint8_t>varFlowCtrl;
+    std::variant<uint8_t> varFlowCtrl;
     try
     {
-        auto method = ctx->bus->new_method_call(diagService,
-                                                diagServiceObj,
+        auto method = ctx->bus->new_method_call(diagService, diagServiceObj,
                                                 dbusPropertyInterface, "Get");
         method.append(diagIntf, "DiagStatus");
         auto reply = ctx->bus->call(method);
@@ -2845,8 +2822,7 @@ ipmi::RspType<uint8_t>
             phosphor::logging::log<level::ERR>(
                 "getDiagFlowCtrl: Get Dbus method returned "
                 "error",
-                phosphor::logging::entry("SERVICE=%s",
-                                         diagService));
+                phosphor::logging::entry("SERVICE=%s", diagService));
             return ipmi::responseUnspecifiedError();
         }
         reply.read(varFlowCtrl);
@@ -2856,15 +2832,15 @@ ipmi::RspType<uint8_t>
         log<level::ERR>(e.what());
         return ipmi::responseUnspecifiedError();
     }
-    uint8_t flowCtrl=std::get<uint8_t>(varFlowCtrl);
-    //Return flowCtrl 0 in case of inprogress
-    if(flowCtrl == 1)
+    uint8_t flowCtrl = std::get<uint8_t>(varFlowCtrl);
+    // Return flowCtrl 0 in case of inprogress
+    if (flowCtrl == 1)
     {
-        flowCtrl=0;
+        flowCtrl = 0;
     }
     return ipmi::responseSuccess(flowCtrl);
 }
-#endif //CPU_DIAG_ENABLE
+#endif // CPU_DIAG_ENABLE
 
 } // namespace ipmi
 
@@ -3143,17 +3119,17 @@ void registerNvOemFunctions()
 
 #ifdef CPU_DIAG_ENABLE
 
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetDiag));
+    log<level::NOTICE>("Registering ",
+                       entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+                       entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdSetDiag));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdSetDiag,
                           ipmi::Privilege::Admin, ipmi::setDiag);
 
-    log<level::NOTICE>(
-        "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
-        entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetDiag));
+    log<level::NOTICE>("Registering ",
+                       entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemNV),
+                       entry("Cmd:[%02Xh]", ipmi::nvidia::misc::cmdGetDiag));
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemNV,
                           ipmi::nvidia::misc::cmdGetDiag,

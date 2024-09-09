@@ -21,6 +21,7 @@
 #include "dgx-a100-config.hpp"
 #include "oemcommandsBF.hpp"
 
+#include <arpa/inet.h>
 #include <bits/stdc++.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
@@ -30,9 +31,6 @@
 #include <security/pam_appl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <vector>
-#include <cstring>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/process/child.hpp>
@@ -47,24 +45,25 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <filesystem>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
-#include <memory>
-#include <stdexcept>
 
-#define MAX_ENTRIES_PER_LOGTYPE  10
-#define IPV4_ADDR_SIZE           4
-#define IPV6_ADDR_SIZE           16
-#define PORT_SIZE                2
-#define INDEX_INDEX              0
-#define LOGTYPE_INDEX            1
-#define ENABLED_INDEX            2
-#define TRANSPORTPROTOCOL_INDEX  3
-#define NETWORKPROTOCOL_INDEX    4
-#define ADDRESS_INDEX            5
+#define MAX_ENTRIES_PER_LOGTYPE 10
+#define IPV4_ADDR_SIZE 4
+#define IPV6_ADDR_SIZE 16
+#define PORT_SIZE 2
+#define INDEX_INDEX 0
+#define LOGTYPE_INDEX 1
+#define ENABLED_INDEX 2
+#define TRANSPORTPROTOCOL_INDEX 3
+#define NETWORKPROTOCOL_INDEX 4
+#define ADDRESS_INDEX 5
 
 const char* systemdServiceBf = "org.freedesktop.systemd1";
 const char* systemdUnitIntfBf = "org.freedesktop.systemd1.Unit";
@@ -94,16 +93,18 @@ const char* powerSubsysInterface =
 // RsyslogFwd
 const char* rsyslogConfigService = "xyz.openbmc_project.Syslog.Config";
 const char* rsyslogLoggingConfigObjPath = "/xyz/openbmc_project/logging/config";
-const char* rsyslogFwdObjPathPrefix = "/xyz/openbmc_project/logging/config/fwd_";
-const char* rsyslogActionsManagerInterface = "xyz.openbmc_project.Logging.RsyslogActionsManager";
+const char* rsyslogFwdObjPathPrefix =
+    "/xyz/openbmc_project/logging/config/fwd_";
+const char* rsyslogActionsManagerInterface =
+    "xyz.openbmc_project.Logging.RsyslogActionsManager";
 const char* rsyslogFwdInterface = "xyz.openbmc_project.Logging.RsyslogFwd";
-const std::vector<std::string> propertyNames = {"Enabled", "TransportProtocol", "NetworkProtocol", "Address", "Port"};
+const std::vector<std::string> propertyNames = {
+    "Enabled", "TransportProtocol", "NetworkProtocol", "Address", "Port"};
 // Guest Tunnel
 const char* bmcGuestTunnelService = "xyz.openbmc_project.Settings";
 const char* bmcGuestTunnelBMCObjPath =
     "/xyz/openbmc_project/control/guest_tunnel";
-const char* bmcGuestTunnelIntf =
-    "xyz.openbmc_project.Object.Enable";
+const char* bmcGuestTunnelIntf = "xyz.openbmc_project.Object.Enable";
 const char* bmcGuestTunnelStatus = "Enabled";
 const char* guestTunnelSystemdObj =
     "/org/freedesktop/systemd1/unit/guest_2dtunnel_2eservice";
@@ -127,11 +128,13 @@ static constexpr const char* createUserMethod = "CreateUser";
 // Network object in dbus
 static constexpr const char* networkService = "xyz.openbmc_project.Network";
 static constexpr const char* networkObj = "/xyz/openbmc_project/network";
-static constexpr const char* networkResetIntf = "xyz.openbmc_project.Common.FactoryReset";
+static constexpr const char* networkResetIntf =
+    "xyz.openbmc_project.Common.FactoryReset";
 
 // Software BMC Updater object in dbus
 static constexpr const char* sftBMCObj = "/xyz/openbmc_project/software";
-static constexpr const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
+static constexpr const char* sftBMCResetIntf =
+    "xyz.openbmc_project.Common.FactoryReset";
 
 static const std::vector<std::string> nicExternalHostPrivileges = {
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FLASH_ACCESS",
@@ -572,7 +575,7 @@ static bool DPUHardRST()
 {
     int response;
     response = executeCmd("/usr/sbin/mlnx_bf_reset_control",
-                            "soc_hard_reset_ignore_host");
+                          "soc_hard_reset_ignore_host");
     if (response)
     {
         log<level::ERR>("Reset Command failed.",
@@ -1499,8 +1502,9 @@ ipmi::RspType<> ipmiSystemFactoryResetBF(boost::asio::yield_context yield)
     // BMC software updater factory reset
     try
     {
-#ifdef BF3-OEM-COMMANDS
-        std::string sftBMCService = "xyz.openbmc_project.Software.BMC.Inventory";
+#ifdef BF3 - OEM - COMMANDS
+        std::string sftBMCService =
+            "xyz.openbmc_project.Software.BMC.Inventory";
 #else
         std::string sftBMCService = "xyz.openbmc_project.Software.BMC.Updater";
 #endif
@@ -1702,7 +1706,8 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                 "Error returns from call to dbus. delete user failed");
             return;
         }
-    }, ipmi::accountService.c_str(),
+    },
+        ipmi::accountService.c_str(),
         std::string(userMgrObjBasePath)
             .append("/")
             .append(
@@ -2214,27 +2219,23 @@ static ipmi::RspType<uint8_t> ipmiCmdERoTReset(ipmi::Context::ptr ctx)
     }
 }
 
-const std::map<uint8_t, std::string> logTypeStringMap = {
-    {0x01, "SEL"},
-    {0x03, "SOL"}
-};
+const std::map<uint8_t, std::string> logTypeStringMap = {{0x01, "SEL"},
+                                                         {0x03, "SOL"}};
 
 const std::map<uint8_t, std::string> transportProtocolStringMap = {
-    {0x00, "UDP"},
-    {0x01, "TCP"}
-};
+    {0x00, "UDP"}, {0x01, "TCP"}};
 
 const std::map<uint8_t, std::string> networkProtocolStringMap = {
-    {0x00, "IPv4"},
-    {0x01, "IPv6"}
-};
+    {0x00, "IPv4"}, {0x01, "IPv6"}};
 
 /* Converts a string from the given map to value */
-uint8_t convertRsyslogFwdEnumItemToByte(std::string str,
-                                        const std::map<uint8_t, std::string> map)
+uint8_t
+    convertRsyslogFwdEnumItemToByte(std::string str,
+                                    const std::map<uint8_t, std::string> map)
 {
-    auto it = std::find_if(map.begin(), map.end(),
-                           [&str](const auto& entry) { return str == entry.second; });
+    auto it = std::find_if(map.begin(), map.end(), [&str](const auto& entry) {
+        return str == entry.second;
+    });
     return (it != map.end()) ? it->first : 0xFF;
 }
 
@@ -2275,8 +2276,7 @@ bool convertIpStringToBytes(const std::string& ip, const std::string& np,
 }
 
 static ipmi::RspType<std::vector<uint8_t>>
-    ipmiGetRsyslogStatus(ipmi::Context::ptr ctx,
-                        uint8_t index, uint8_t logType)
+    ipmiGetRsyslogStatus(ipmi::Context::ptr ctx, uint8_t index, uint8_t logType)
 {
     /*
      * Response data:
@@ -2314,10 +2314,9 @@ static ipmi::RspType<std::vector<uint8_t>>
     /* Searchs for the required object, fwd_<LogType>_<Indx>, under
     /xyz/openbmc_project/logging/config */
     DbusObjectInfo objInfo;
-    boost::system::error_code ec = ipmi::getDbusObject(ctx, rsyslogFwdInterface,
-                                                       rsyslogLoggingConfigObjPath,
-                                                       (logTypeStr + "_" + std::to_string(index)),
-                                                       objInfo);
+    boost::system::error_code ec = ipmi::getDbusObject(
+        ctx, rsyslogFwdInterface, rsyslogLoggingConfigObjPath,
+        (logTypeStr + "_" + std::to_string(index)), objInfo);
     if (ec)
     {
         phosphor::logging::log<level::ERR>(
@@ -2328,24 +2327,31 @@ static ipmi::RspType<std::vector<uint8_t>>
     }
 
     /* Gets properties */
-    std::unordered_map<std::string, std::variant<bool, std::string, uint16_t>> properties;
+    std::unordered_map<std::string, std::variant<bool, std::string, uint16_t>>
+        properties;
     for (const auto& propertyName : propertyNames)
     {
         try
         {
-            /* Each property in propertyNames is requested and saved in properties unordered map */
+            /* Each property in propertyNames is requested and saved in
+             * properties unordered map */
             std::variant<bool, std::string, uint16_t> value;
-            auto val = ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName);
+            auto val = ipmi::getDbusProperty(*dbus, objInfo.second,
+                                             objInfo.first, rsyslogFwdInterface,
+                                             propertyName);
 
             /* Finds the type of each property */
-            std::visit([&](auto&& arg)
-            {
+            std::visit(
+                [&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, std::string> || std::is_same_v<T, uint16_t>)
+                if constexpr (std::is_same_v<T, bool> ||
+                              std::is_same_v<T, std::string> ||
+                              std::is_same_v<T, uint16_t>)
                 {
                     value = arg;
                 }
-            }, val);
+            },
+                val);
 
             properties[propertyName] = value;
         }
@@ -2369,14 +2375,16 @@ static ipmi::RspType<std::vector<uint8_t>>
     response.push_back(static_cast<uint8_t>(enabled));
 
     /* TransportProtocol */
-    std::string transportProtocol = std::get<std::string>(properties["TransportProtocol"]);
+    std::string transportProtocol =
+        std::get<std::string>(properties["TransportProtocol"]);
 
     /* GetProperty returns the full name of the enum,
     "xyz.openbmc_project.Logging.RsyslogFwd.<enum>.<item>",
     while the map contains only the <item> */
-    transportProtocol = transportProtocol.substr(transportProtocol.find_last_of('.') + 1);
-    uint8_t transportProtocolByte = convertRsyslogFwdEnumItemToByte(transportProtocol,
-                                                                    transportProtocolStringMap);
+    transportProtocol =
+        transportProtocol.substr(transportProtocol.find_last_of('.') + 1);
+    uint8_t transportProtocolByte = convertRsyslogFwdEnumItemToByte(
+        transportProtocol, transportProtocolStringMap);
     if (transportProtocolByte == 0xFF)
     {
         phosphor::logging::log<level::ERR>("TransportProtocol is invalid");
@@ -2385,10 +2393,12 @@ static ipmi::RspType<std::vector<uint8_t>>
     response.push_back(transportProtocolByte);
 
     /* NetworkProtocol */
-    std::string networkProtocol = std::get<std::string>(properties["NetworkProtocol"]);
-    networkProtocol = networkProtocol.substr(networkProtocol.find_last_of('.') + 1);
-    uint8_t networkProtocolByte = convertRsyslogFwdEnumItemToByte(networkProtocol,
-                                                                  networkProtocolStringMap);
+    std::string networkProtocol =
+        std::get<std::string>(properties["NetworkProtocol"]);
+    networkProtocol =
+        networkProtocol.substr(networkProtocol.find_last_of('.') + 1);
+    uint8_t networkProtocolByte = convertRsyslogFwdEnumItemToByte(
+        networkProtocol, networkProtocolStringMap);
     if (networkProtocolByte == 0xFF)
     {
         phosphor::logging::log<level::ERR>("NetworkProtocolByte is invalid");
@@ -2409,15 +2419,14 @@ static ipmi::RspType<std::vector<uint8_t>>
 
     /* Port - LSB First */
     uint16_t port = std::get<uint16_t>(properties["Port"]);
-    response.push_back(port & 0xFF); /* LSB */
+    response.push_back(port & 0xFF);        /* LSB */
     response.push_back((port >> 8) & 0xFF); /* MSB */
 
     return ipmi::responseSuccess(response);
 }
 
-ipmi::RspType<uint8_t>
-    ipmiSetRsyslogStatus(ipmi::Context::ptr ctx,
-                        std::vector<uint8_t> dataIn)
+ipmi::RspType<uint8_t> ipmiSetRsyslogStatus(ipmi::Context::ptr ctx,
+                                            std::vector<uint8_t> dataIn)
 {
     /*
      * Received data:
@@ -2469,8 +2478,9 @@ ipmi::RspType<uint8_t>
         return ipmi::responseInvalidFieldRequest();
     }
     transportProtocolStr = it->second;
-    transportProtocolStr = "xyz.openbmc_project.Logging.RsyslogFwd.TransportProtocol." +
-                           transportProtocolStr;
+    transportProtocolStr =
+        "xyz.openbmc_project.Logging.RsyslogFwd.TransportProtocol." +
+        transportProtocolStr;
 
     /* Extracts NetworkProtocol */
     std::string networkProtocolStr;
@@ -2481,13 +2491,15 @@ ipmi::RspType<uint8_t>
         return ipmi::responseInvalidFieldRequest();
     }
     networkProtocolStr = it->second;
-    networkProtocolStr = "xyz.openbmc_project.Logging.RsyslogFwd.NetworkProtocol." +
-                         networkProtocolStr;
+    networkProtocolStr =
+        "xyz.openbmc_project.Logging.RsyslogFwd.NetworkProtocol." +
+        networkProtocolStr;
 
     /* IPv4 */
     std::string address;
     uint16_t port;
-    if (networkProtocolStr == "xyz.openbmc_project.Logging.RsyslogFwd.NetworkProtocol.IPv4")
+    if (networkProtocolStr ==
+        "xyz.openbmc_project.Logging.RsyslogFwd.NetworkProtocol.IPv4")
     {
         /* Extracts Address. Address size is 4 Bytes */
         if (dataIn.size() != ADDRESS_INDEX + IPV4_ADDR_SIZE + PORT_SIZE)
@@ -2499,7 +2511,8 @@ ipmi::RspType<uint8_t>
         std::vector<uint8_t> addressBytes(dataIn.begin() + ADDRESS_INDEX,
                                           dataIn.begin() + PORT_INDEX);
         char addressBuf[INET_ADDRSTRLEN];
-        if (inet_ntop(AF_INET, addressBytes.data(), addressBuf, INET_ADDRSTRLEN) == nullptr)
+        if (inet_ntop(AF_INET, addressBytes.data(), addressBuf,
+                      INET_ADDRSTRLEN) == nullptr)
         {
             log<level::ERR>("Address is invalid");
             return ipmi::responseInvalidFieldRequest();
@@ -2526,7 +2539,8 @@ ipmi::RspType<uint8_t>
         std::vector<uint8_t> addressBytes(dataIn.begin() + ADDRESS_INDEX,
                                           dataIn.begin() + PORT_INDEX);
         char addressBuf[INET6_ADDRSTRLEN];
-        if (inet_ntop(AF_INET6, addressBytes.data(), addressBuf, INET6_ADDRSTRLEN) == nullptr)
+        if (inet_ntop(AF_INET6, addressBytes.data(), addressBuf,
+                      INET6_ADDRSTRLEN) == nullptr)
         {
             log<level::ERR>("Address is invalid");
             return ipmi::responseInvalidFieldRequest();
@@ -2546,11 +2560,9 @@ ipmi::RspType<uint8_t>
     /* Searchs for the required object, fwd_<LogType>_<Indx>, under
     /xyz/openbmc_project/logging/config */
     DbusObjectInfo objInfo;
-    boost::system::error_code ec = ipmi::getDbusObject(ctx, rsyslogFwdInterface,
-                                                       rsyslogLoggingConfigObjPath,
-                                                       (logTypeNameStr + "_" +
-                                                        std::to_string(index)),
-                                                       objInfo);
+    boost::system::error_code ec = ipmi::getDbusObject(
+        ctx, rsyslogFwdInterface, rsyslogLoggingConfigObjPath,
+        (logTypeNameStr + "_" + std::to_string(index)), objInfo);
 
     if (ec)
     {
@@ -2559,8 +2571,7 @@ ipmi::RspType<uint8_t>
         {
             auto method = dbus->new_method_call(
                 rsyslogConfigService, rsyslogLoggingConfigObjPath,
-                rsyslogActionsManagerInterface,
-                "CreateRsyslogFwdIndex");
+                rsyslogActionsManagerInterface, "CreateRsyslogFwdIndex");
             method.append(index, logTypeStr, enabled, transportProtocolStr,
                           networkProtocolStr, address, port);
 
@@ -2598,27 +2609,36 @@ ipmi::RspType<uint8_t>
             {
                 /* Checks current value */
                 Value curValue;
-                auto val = ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName);
+                auto val =
+                    ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first,
+                                          rsyslogFwdInterface, propertyName);
 
-                std::visit([&](auto&& arg)
-                {
+                std::visit(
+                    [&](auto&& arg) {
                     using T = std::decay_t<decltype(arg)>;
-                    if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, std::string> || std::is_same_v<T, uint16_t>)
+                    if constexpr (std::is_same_v<T, bool> ||
+                                  std::is_same_v<T, std::string> ||
+                                  std::is_same_v<T, uint16_t>)
                     {
                         curValue = arg;
                     }
-                }, val);
+                },
+                    val);
 
-                /* Sets a new value only if it is different than the current one */
+                /* Sets a new value only if it is different than the current one
+                 */
                 if (curValue != propertiesNewVals[propertyName])
                 {
-                    ipmi::setDbusProperty(*dbus, objInfo.second, objInfo.first, rsyslogFwdInterface, propertyName, propertiesNewVals[propertyName]);
+                    ipmi::setDbusProperty(*dbus, objInfo.second, objInfo.first,
+                                          rsyslogFwdInterface, propertyName,
+                                          propertiesNewVals[propertyName]);
                 }
             }
             catch (std::exception& e)
             {
-                log<level::ERR>("Failed to get rsyslogFwd property",
-                                phosphor::logging::entry("EXCEPTION=%s", e.what()));
+                log<level::ERR>(
+                    "Failed to get rsyslogFwd property",
+                    phosphor::logging::entry("EXCEPTION=%s", e.what()));
                 return ipmi::responseUnspecifiedError();
             }
         }
@@ -2648,11 +2668,11 @@ ipmi::RspType<uint8_t>
  * @param ctx        A pointer to the IPMI context, which includes information
  *                   about the D-Bus connection and other context-related data.
  * @param parameter  The user input parameter for different commands.
- * @return           An instance of ipmi::RspType<uint8_t> representing the result of the
- *                   operation.
+ * @return           An instance of ipmi::RspType<uint8_t> representing the
+ * result of the operation.
  */
 ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
-                                               uint8_t parameter)
+                                          uint8_t parameter)
 {
     /*
      * Received Byte 1:
@@ -2661,7 +2681,8 @@ ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
      * 0x02                    : Enable Guest Tunnel
      */
     bool setEnabled = false;
-    try {
+    try
+    {
         auto method = ctx->bus->new_method_call(bmcGuestTunnelService,
                                                 bmcGuestTunnelBMCObjPath,
                                                 dbusPropertyInterface, "Get");
@@ -2684,24 +2705,28 @@ ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
             case ipmi::nvidia::enumGuestTunnelQuery:
                 if (currState == true)
                 {
-                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelEnable);
+                    return ipmi::responseSuccess(
+                        ipmi::nvidia::enumGuestTunnelEnable);
                 }
                 else
                 {
-                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelDisable);
+                    return ipmi::responseSuccess(
+                        ipmi::nvidia::enumGuestTunnelDisable);
                 }
                 break;
             case ipmi::nvidia::enumGuestTunnelDisable:
                 if (currState == false)
                 {
-                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelDisable);
+                    return ipmi::responseSuccess(
+                        ipmi::nvidia::enumGuestTunnelDisable);
                 }
                 setEnabled = false;
                 break;
             case ipmi::nvidia::enumGuestTunnelEnable:
                 if (currState == true)
                 {
-                    return ipmi::responseSuccess(ipmi::nvidia::enumGuestTunnelEnable);
+                    return ipmi::responseSuccess(
+                        ipmi::nvidia::enumGuestTunnelEnable);
                 }
                 setEnabled = true;
                 break;
@@ -2725,8 +2750,7 @@ ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
         auto method = ctx->bus->new_method_call(bmcGuestTunnelService,
                                                 bmcGuestTunnelBMCObjPath,
                                                 dbusPropertyInterface, "Set");
-        method.append(bmcGuestTunnelIntf, bmcGuestTunnelStatus,
-                      value);
+        method.append(bmcGuestTunnelIntf, bmcGuestTunnelStatus, value);
         auto reply = ctx->bus->call(method);
     }
     catch (const std::exception& e)
@@ -2758,19 +2782,23 @@ ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
  * @brief Executes a shell command and returns its output and return code.
  *
  * @param command The shell command to be executed.
- * @return A std::pair containing the command's output (std::string) and the return code (int).
+ * @return A std::pair containing the command's output (std::string) and the
+ * return code (int).
  */
-std::pair<std::string, int> executeCommand(const char* command, int readUntil = 512)
+std::pair<std::string, int> executeCommand(const char* command,
+                                           int readUntil = 512)
 {
     std::array<char, 128> buffer;
     std::string result;
     std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command, "r"), pclose);
     if (!pipe)
     {
-        throw std::runtime_error("Failed executing command: " + std::string(command));
+        throw std::runtime_error("Failed executing command: " +
+                                 std::string(command));
     }
     // Read until EOF or readUntil is reached
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr && readUntil > 0) 
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr &&
+           readUntil > 0)
     {
         result += buffer.data();
         readUntil -= strlen(buffer.data());
@@ -2784,7 +2812,8 @@ std::pair<std::string, int> executeCommand(const char* command, int readUntil = 
     rc = WIFEXITED(rc) ? WEXITSTATUS(rc) : -1; // Get rc from the child process
 
     // Remove spaces and newlines
-    result.erase(std::remove_if(result.begin(), result.end(), ::isspace), result.end());
+    result.erase(std::remove_if(result.begin(), result.end(), ::isspace),
+                 result.end());
 
     return std::make_pair(result, rc);
 }
@@ -2792,15 +2821,15 @@ std::pair<std::string, int> executeCommand(const char* command, int readUntil = 
 /**
  * @brief Sets the BIOS mode on the system based on the given parameter.
  *
- * Checks the current BIOS mode and, if necessary, changes it to the requested mode
- * (Debug or Normal). Executes a command to set the mode via rshim.
+ * Checks the current BIOS mode and, if necessary, changes it to the requested
+ * mode (Debug or Normal). Executes a command to set the mode via rshim.
  *
  * @param ctx The IPMI context.
  * @param parameter The requested BIOS mode (0/1).
  * @return An IPMI response indicating the result of the operation.
  */
 ipmi::RspType<uint8_t> ipmicmdBIOSModeSet(ipmi::Context::ptr ctx,
-                                               uint8_t parameter)
+                                          uint8_t parameter)
 {
     try
     {
@@ -2813,24 +2842,34 @@ ipmi::RspType<uint8_t> ipmicmdBIOSModeSet(ipmi::Context::ptr ctx,
             case ipmi::nvidia::enumBIOSModeNormal:
                 break;
             default:
-                log<level::ERR>("ipmicmdBIOSMode: Invalid Set Parameter Value Received",
-                                entry("VALUE=%u", parameter));
-                return ipmi::responseInvalidFieldRequest(); // Invalid parameter, return ipmi error
+                log<level::ERR>(
+                    "ipmicmdBIOSMode: Invalid Set Parameter Value Received",
+                    entry("VALUE=%u", parameter));
+                return ipmi::responseInvalidFieldRequest(); // Invalid
+                                                            // parameter, return
+                                                            // ipmi error
         }
-        auto biosModeForRshim = set_to_debug ? ipmi::nvidia::enumBIOSModeDebug : ipmi::nvidia::enumBIOSModeNormal;
+        auto biosModeForRshim = set_to_debug ? ipmi::nvidia::enumBIOSModeDebug
+                                             : ipmi::nvidia::enumBIOSModeNormal;
 
-        std::string command = std::string(rshimCmdSetBiosMode) + " " + std::to_string(biosModeForRshim); // Build the set command
-        executeCommand(command.c_str()); // Set the mode via rshim
+        std::string command =
+            std::string(rshimCmdSetBiosMode) + " " +
+            std::to_string(biosModeForRshim); // Build the set command
+        executeCommand(command.c_str());      // Set the mode via rshim
 
-        std::pair<std::string, int> ret = executeCommand(rshimCmdGetBiosMode); // Get the applied mode and check if it was set correctly
-        int mode = std::stoi(ret.first, nullptr, 16); // Convert recived hex mode to int
+        std::pair<std::string, int> ret = executeCommand(
+            rshimCmdGetBiosMode); // Get the applied mode and check if it was
+                                  // set correctly
+        int mode = std::stoi(ret.first, nullptr,
+                             16); // Convert recived hex mode to int
 
-        if (ret.second != 0 || (mode != biosModeForRshim)) // Check if the mode was set correctly
+        if (ret.second != 0 ||
+            (mode != biosModeForRshim)) // Check if the mode was set correctly
         {
             log<level::ERR>("Failed to set BIOS mode in rshim",
                             entry("COMMAND_OUTPUT=%s", ret.first.c_str()));
             return ipmi::responseResponseError();
-        }      
+        }
     }
     catch (const std::exception& e)
     {
@@ -2849,7 +2888,7 @@ ipmi::RspType<uint8_t> ipmicmdBIOSModeSet(ipmi::Context::ptr ctx,
  * raw 0x3e 0x24 0x2 - Query BIOS Mode Status
  * Returns 0x0 - Normal/Default mode
  *         0x1 - Debug mode
- * 
+ *
  * raw 0x3e 0x24 0x0 - Set BIOS Mode to Normal
  * Returns 0x0
  * raw 0x3e 0x24 0x1 - Set BIOS Mode to Debug
@@ -2864,22 +2903,24 @@ ipmi::RspType<uint8_t> ipmicmdBIOSModeSet(ipmi::Context::ptr ctx,
     * 0x01                    : Set BIOS Mode to Debug
     * 0x02                    : Query BIOS Mode Status
  *
- * @return           An instance of ipmi::RspType<uint8_t> representing the result of the
+ * @return           An instance of ipmi::RspType<uint8_t> representing the
+ result of the
  *                   operation.
  */
 ipmi::RspType<uint8_t> ipmicmdBIOSMode(ipmi::Context::ptr ctx,
-                                               uint8_t parameter)
+                                       uint8_t parameter)
 {
     try
     {
         if (parameter == ipmi::nvidia::enumBIOSModeQuery)
         {
-            std::pair<std::string, int> ret = executeCommand(rshimCmdGetBiosMode);
+            std::pair<std::string, int> ret =
+                executeCommand(rshimCmdGetBiosMode);
             uint8_t biosMode = std::stoi(ret.first, nullptr, 16);
 
-            if (ret.second != 0 || 
-                (biosMode != ipmi::nvidia::enumBIOSModeDebug && 
-                biosMode != ipmi::nvidia::enumBIOSModeNormal))
+            if (ret.second != 0 ||
+                (biosMode != ipmi::nvidia::enumBIOSModeDebug &&
+                 biosMode != ipmi::nvidia::enumBIOSModeNormal))
             {
                 log<level::ERR>("Failed to get BIOS mode from rshim",
                                 entry("COMMAND_OUTPUT=%s", ret.first.c_str()));
@@ -2887,15 +2928,14 @@ ipmi::RspType<uint8_t> ipmicmdBIOSMode(ipmi::Context::ptr ctx,
             }
             return ipmi::responseSuccess(biosMode);
         }
-        
+
         return ipmicmdBIOSModeSet(ctx, parameter);
     }
     catch (const std::exception& e)
     {
-        log<level::ERR>("Get BIOS Mode Error",
-                        entry("ERROR=%s", e.what()));
+        log<level::ERR>("Get BIOS Mode Error", entry("ERROR=%s", e.what()));
         return ipmi::responseUnspecifiedError();
-    }    
+    }
 }
 } // namespace ipmi
 
@@ -3271,7 +3311,7 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
                           ipmi::nvidia::app::cmdGuestTunnel,
                           ipmi::Privilege::Admin, ipmi::ipmicmdGuestTunnel);
-    
+
     // <BIOS Mode>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
                           ipmi::nvidia::app::cmdBIOSMode,
@@ -3280,7 +3320,8 @@ void registerNvOemPlatformFunctions()
     // <BMC Factory Reset>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdSystemFactoryReset,
-                          ipmi::Privilege::Admin, ipmi::ipmiSystemFactoryResetBF);
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSystemFactoryResetBF);
 
     return;
 }
