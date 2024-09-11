@@ -56,6 +56,7 @@ const char* networkResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 
 // Software BMC Updater object in dbus
 const char* sftBMCObj = "/xyz/openbmc_project/software";
+const char* factoryResetBMCObj = "/xyz/openbmc_project/software/bmc";
 const char* sftBMCResetIntf = "xyz.openbmc_project.Common.FactoryReset";
 
 const char* sftVendorFieldModeService =
@@ -308,10 +309,11 @@ ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
     try
     {
         std::string sftBMCService = ipmi::getService(*sdbusp, sftBMCResetIntf,
-                                                     sftBMCObj);
+                                                     factoryResetBMCObj);
 
-        sdbusp->yield_method_call<void>(yield, ec, sftBMCService, sftBMCObj,
-                                        sftBMCResetIntf, "Reset");
+        sdbusp->yield_method_call<void>(yield, ec, sftBMCService,
+                                        factoryResetBMCObj, sftBMCResetIntf,
+                                        "Reset");
         if (ec)
         {
             phosphor::logging::log<level::ERR>(
