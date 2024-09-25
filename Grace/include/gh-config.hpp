@@ -86,7 +86,7 @@ constexpr auto GWpGpioId = 70;
 constexpr auto GWpGpioChip = "gpiochip816";
 
 #ifdef CPU_DIAG_ENABLE
-constexpr auto diagServiceList = "cpu-diag-status.timer"
+constexpr auto diagServiceList = "cpu-diag-status.timer "
                                  "cpu-diag-status.service";
 #endif
 
