@@ -1501,7 +1501,8 @@ static void SetBootstrapPassword(int index, std::string password)
     }
 }
 
-#ifdef BF3 - OEM - COMMANDS
+#ifdef BF3_OEM_COMMANDS
+
 ipmi::RspType<> ipmiSystemFactoryResetBF(boost::asio::yield_context yield)
 {
     /*
@@ -3331,7 +3332,8 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
                           ipmi::nvidia::app::cmdBIOSMode,
                           ipmi::Privilege::Admin, ipmi::ipmicmdBIOSMode);
-#ifdef BF3 - OEM - COMMANDS
+#ifdef BF3_OEM_COMMANDS
+
     // <BMC Factory Reset>
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdSystemFactoryReset,

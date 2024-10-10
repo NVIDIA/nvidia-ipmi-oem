@@ -186,7 +186,7 @@ if(bf3-chassis-commands)
 endif()
 
 if(BF3-OEM-COMMANDS)
-    add_definitions (-DBF3-OEM-COMMANDS)
+    add_definitions (-DBF3_OEM_COMMANDS)
 endif()
 
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
