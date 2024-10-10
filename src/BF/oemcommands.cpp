@@ -125,6 +125,12 @@ static constexpr const char* biosConfigMgrIface =
     "xyz.openbmc_project.BIOSConfig.Manager";
 static constexpr const char* createUserMethod = "CreateUser";
 
+// Network object in dbus
+static constexpr const char* networkService = "xyz.openbmc_project.Network";
+static constexpr const char* networkObj = "/xyz/openbmc_project/network";
+static constexpr const char* networkResetIntf =
+    "xyz.openbmc_project.Common.FactoryReset";
+
 static const std::vector<std::string> nicExternalHostPrivileges = {
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FLASH_ACCESS",
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FW_UPDATE",
@@ -271,6 +277,46 @@ static int executeCmd(const char* path, ArgTypes&&... tArgs)
     boost::process::child execProg(path, const_cast<char*>(tArgs)...);
     execProg.wait();
     return execProg.exit_code();
+}
+
+/**
+ * @brief Executes a shell command and returns its output and return code.
+ *
+ * @param command The shell command to be executed.
+ * @return A std::pair containing the command's output (std::string) and the
+ * return code (int).
+ */
+std::pair<std::string, int> executeCommand(const char* command,
+                                           int readUntil = 512)
+{
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command, "r"), pclose);
+    if (!pipe)
+    {
+        throw std::runtime_error("Failed executing command: " +
+                                 std::string(command));
+    }
+    // Read until EOF or readUntil is reached
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr &&
+           readUntil > 0)
+    {
+        result += buffer.data();
+        readUntil -= strlen(buffer.data());
+    }
+    int rc = pclose(pipe.release());
+    if (rc == -1)
+    {
+        throw std::runtime_error("Failed to close pipe");
+    }
+
+    rc = WIFEXITED(rc) ? WEXITSTATUS(rc) : -1; // Get rc from the child process
+
+    // Remove spaces and newlines
+    result.erase(std::remove_if(result.begin(), result.end(), ::isspace),
+                 result.end());
+
+    return std::make_pair(result, rc);
 }
 
 ipmi::RspType<> ipmiSetRshimStateBf(uint8_t newState)
@@ -1454,6 +1500,86 @@ static void SetBootstrapPassword(int index, std::string password)
         ipmi::userDatabase[index].password = password;
     }
 }
+
+#ifdef BF3 - OEM - COMMANDS
+ipmi::RspType<> ipmiSystemFactoryResetBF(boost::asio::yield_context yield)
+{
+    /*
+     * BMC factory reset must be use to restore the BMC to its
+     * original manufacturer settings.
+     * IPMI performs below 2 steps:
+     * 1. The network factory reset, it overwrites the configuration
+     *    for all configured network interfaces to a DHCP setting.
+     * 2. The BMC software updater factory reset, it clears any
+     *    volumes and persistence files created by the BMC processes.
+     *    This reset occurs only on the next BMC reboot.
+     */
+
+    auto sdbusp = getSdBus();
+    boost::system::error_code ec;
+
+    // Network factory reset
+    try
+    {
+        sdbusp->yield_method_call<void>(yield, ec, networkService, networkObj,
+                                        networkResetIntf, "Reset");
+        if (ec)
+        {
+            phosphor::logging::log<level::ERR>(
+                "Unspecified Error on network reset");
+            return ipmi::responseUnspecifiedError();
+        }
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    // BMC software updater factory reset
+    try
+    {
+        auto ret = executeCommand("/sbin/fw_setenv openbmconce factory-reset");
+        if (ret.second != 0)
+        {
+            log<level::ERR>("Failed to set openbmconce to factory-reset");
+            return ipmi::responseUnspecifiedError();
+        }
+
+        ret = executeCommand("/sbin/fw_setenv openbmclog factory-reset");
+        if (ret.second != 0)
+        {
+            log<level::ERR>("Failed to set openbmclog to factory-reset");
+            return ipmi::responseUnspecifiedError();
+        }
+
+        uint readFactoryResetTries = 3;
+        while (readFactoryResetTries > 0)
+        {
+            ret = executeCommand("/sbin/fw_printenv openbmconce");
+            if (ret.second == 0 &&
+                ret.first.find("factory-reset") != std::string::npos)
+            {
+                break;
+            }
+            log<level::DEBUG>("Wait for factory reset set.");
+            --readFactoryResetTries;
+            sleep(1);
+        }
+        if (readFactoryResetTries == 0)
+        {
+            log<level::ERR>("Error while trying to set factory-reset");
+            return ipmi::responseUnspecifiedError();
+        }
+        log<level::DEBUG>("BMC factory reset will take effect upon reboot");
+    }
+    catch (...)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess();
+}
+#endif
 
 static ipmi::RspType<>
     ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
@@ -2708,46 +2834,6 @@ ipmi::RspType<uint8_t> ipmicmdGuestTunnel(ipmi::Context::ptr ctx,
 }
 
 /**
- * @brief Executes a shell command and returns its output and return code.
- *
- * @param command The shell command to be executed.
- * @return A std::pair containing the command's output (std::string) and the
- * return code (int).
- */
-std::pair<std::string, int> executeCommand(const char* command,
-                                           int readUntil = 512)
-{
-    std::array<char, 128> buffer;
-    std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command, "r"), pclose);
-    if (!pipe)
-    {
-        throw std::runtime_error("Failed executing command: " +
-                                 std::string(command));
-    }
-    // Read until EOF or readUntil is reached
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr &&
-           readUntil > 0)
-    {
-        result += buffer.data();
-        readUntil -= strlen(buffer.data());
-    }
-    int rc = pclose(pipe.release());
-    if (rc == -1)
-    {
-        throw std::runtime_error("Failed to close pipe");
-    }
-
-    rc = WIFEXITED(rc) ? WEXITSTATUS(rc) : -1; // Get rc from the child process
-
-    // Remove spaces and newlines
-    result.erase(std::remove_if(result.begin(), result.end(), ::isspace),
-                 result.end());
-
-    return std::make_pair(result, rc);
-}
-
-/**
  * @brief Sets the BIOS mode on the system based on the given parameter.
  *
  * Checks the current BIOS mode and, if necessary, changes it to the requested
@@ -3245,6 +3331,12 @@ void registerNvOemPlatformFunctions()
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemEight,
                           ipmi::nvidia::app::cmdBIOSMode,
                           ipmi::Privilege::Admin, ipmi::ipmicmdBIOSMode);
-
+#ifdef BF3 - OEM - COMMANDS
+    // <BMC Factory Reset>
+    ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
+                          ipmi::nvidia::app::cmdSystemFactoryReset,
+                          ipmi::Privilege::Admin,
+                          ipmi::ipmiSystemFactoryResetBF);
+#endif
     return;
 }
