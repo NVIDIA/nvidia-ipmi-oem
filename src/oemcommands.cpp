@@ -2359,7 +2359,30 @@ static int gpioExport(std::string gpiochip, uint32_t gpio)
         return -1;
     }
 
-    chipbase >> base;
+    if (!(chipbase >> base))
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to read gpiochip base!");
+        chipbase.close();
+        return -1;
+    }
+
+    if (base < 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Invalid gpiochip base!");
+        chipbase.close();
+        return -1;
+    }
+
+    if (gpio > std::numeric_limits<uint32_t>::max() - base)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "gpio value is too large!");
+        chipbase.close();
+        return -1;
+    }
+
     chipbase.close();
 
     gpio += base;
