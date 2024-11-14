@@ -1571,7 +1571,7 @@ ipmi::RspType<> ipmiSystemFactoryResetBF(boost::asio::yield_context yield)
             log<level::ERR>("Error while trying to set factory-reset");
             return ipmi::responseUnspecifiedError();
         }
-        log<level::DEBUG>("BMC factory reset will take effect upon reboot");
+        log<level::INFO>("BMC factory reset will take effect upon reboot");
     }
     catch (...)
     {
