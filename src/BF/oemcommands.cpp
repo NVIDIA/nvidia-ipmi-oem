@@ -149,6 +149,10 @@ const char* connectxHostAccessObj =
 const char* connectxSmartnicOsState =
     "/xyz/openbmc_project/network/connectx/smartnic_os_state/os_state";
 
+/* OS state values defined at "Smart NIC OS State NCSI" command */
+#define NIC_OS_STATE_BL31 2
+#define NIC_OS_STATE_UEFI 3
+
 struct PropertyInfo
 {
     const char* intf;
@@ -1702,78 +1706,6 @@ static int atomicLock()
     return 0;
 }
 
-static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
-    ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx,
-                              uint8_t disableCredBootStrap)
-{
-    phosphor::logging::log<phosphor::logging::level::INFO>(
-        "ipmiGetBootStrapAccountBF start");
-
-    if (atomicLock() < 0)
-    {
-        phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ipmiGetBootStrapAccountBF: atomic flag is set");
-
-        /* Returns the previous account. Processing is not complete yet. */
-        int prevUserIndex = ipmi::BootStrapCurrentUserIndex == 1 ? 0 : 1;
-
-        size_t passwordSize =
-            ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf.size();
-
-        if (passwordSize != BOOTSTRAP_PASSWORD_SIZE)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "ipmiGetBootStrapAccountBF : Invalid password size.",
-                phosphor::logging::entry("SIZE= %zu", passwordSize));
-            return ipmi::responseResponseError();
-        }
-
-        auto ret = ipmi::responseSuccess(
-            ipmi::userDatabaseBuff[prevUserIndex].respUserNameBuf,
-            ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf);
-        return ret;
-    }
-    // Remove the following account, and the bootstrap manager will recreate it.
-    size_t passwordSize =
-        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex]
-            .respPasswordBuf.size();
-
-    if (passwordSize != BOOTSTRAP_PASSWORD_SIZE)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "ipmiGetBootStrapAccountBF : Invalid password size.",
-            phosphor::logging::entry("SIZE= %zu", passwordSize));
-        return ipmi::responseResponseError();
-    }
-    auto ret = ipmi::responseSuccess(
-        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
-        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex]
-            .respPasswordBuf);
-    // Switch current account
-    ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1
-                                                                           : 0;
-    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-
-    dbus->async_method_call(
-        [](boost::system::error_code ec2, sdbusplus::message_t& m) {
-        if (ec2 || m.is_method_error())
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Error returns from call to dbus. delete user failed");
-            return;
-        }
-    },
-        ipmi::accountService.c_str(),
-        std::string(userMgrObjBasePath)
-            .append("/")
-            .append(
-                ipmi::getBootstrapUserName(ipmi::BootStrapCurrentUserIndex)),
-        usersDeleteIface, "Delete");
-    phosphor::logging::log<phosphor::logging::level::INFO>(
-        "ipmiGetBootStrapAccountBF end");
-    return ret;
-}
-
 // read property return value as int, using propertyInfo to map string
 // property to int, regarding negative as error
 static int readPropToInt(ipmi::Context::ptr ctx, const char* service,
@@ -1864,6 +1796,123 @@ ipmi::RspType<> simplePropertySet(ipmi::Context::ptr ctx, const char* service,
             (std::string(obj) + "set failed").c_str());
         return ipmi::responseResponseError();
     }
+}
+
+static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
+    ipmiGetBootStrapAccountBFInternal(ipmi::Context::ptr ctx,
+                                      uint8_t disableCredBootStrap,
+                                      bool useNcsi)
+{
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiGetBootStrapAccountBFInternal start");
+
+    if (useNcsi)
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ipmiGetBootStrapAccountBFInternal: send NCSI command.");
+        auto result = simplePropertyGet(
+            ctx, connectxSevice, connectxSmartnicOsState, smartNicOsStateInfo);
+
+        /* Extract response code and property value tuple */
+        auto responseCode = std::get<0>(result);
+        auto optionalResult = std::get<1>(result);
+
+        /* Check if the response is not success or if the value is null */
+        if (responseCode != ipmi::ccSuccess || !optionalResult)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiGetBootStrapAccountBFInternal: simplePropertyGet failed or returned invalid response code.");
+            /* Credential bootstrapping via IPMI commands is disabled */
+            return ipmi::responseResponseError();
+        }
+
+        auto value = std::get<0>(optionalResult.value());
+
+        if (value != NIC_OS_STATE_BL31 && value != NIC_OS_STATE_UEFI)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiGetBootStrapAccountBFInternal: simplePropertyGet returned unexpected value.",
+                phosphor::logging::entry("OS_STATE= %u", value));
+            return ipmi::responseResponseError();
+        }
+    }
+
+    if (atomicLock() < 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "ipmiGetBootStrapAccountBFInternal: atomic flag is set");
+
+        /* Returns the previous account. Processing is not complete yet. */
+        int prevUserIndex = ipmi::BootStrapCurrentUserIndex == 1 ? 0 : 1;
+
+        size_t passwordSize =
+            ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf.size();
+
+        if (passwordSize != BOOTSTRAP_PASSWORD_SIZE)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiGetBootStrapAccountBFInternal : Invalid password size.",
+                phosphor::logging::entry("SIZE= %zu", passwordSize));
+            return ipmi::responseResponseError();
+        }
+
+        auto ret = ipmi::responseSuccess(
+            ipmi::userDatabaseBuff[prevUserIndex].respUserNameBuf,
+            ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf);
+        return ret;
+    }
+    // Remove the following account, and the bootstrap manager will recreate it.
+    size_t passwordSize =
+        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex]
+            .respPasswordBuf.size();
+
+    if (passwordSize != BOOTSTRAP_PASSWORD_SIZE)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiGetBootStrapAccountBFInternal : Invalid password size.",
+            phosphor::logging::entry("SIZE= %zu", passwordSize));
+        return ipmi::responseResponseError();
+    }
+    auto ret = ipmi::responseSuccess(
+        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
+        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex]
+            .respPasswordBuf);
+    // Switch current account
+    ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1
+                                                                           : 0;
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+
+    dbus->async_method_call(
+        [](boost::system::error_code ec2, sdbusplus::message_t& m) {
+        if (ec2 || m.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error returns from call to dbus. delete user failed");
+            return;
+        }
+    },
+        ipmi::accountService.c_str(),
+        std::string(userMgrObjBasePath)
+            .append("/")
+            .append(
+                ipmi::getBootstrapUserName(ipmi::BootStrapCurrentUserIndex)),
+        usersDeleteIface, "Delete");
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiGetBootStrapAccountBFInternal end");
+    return ret;
+}
+
+static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
+    ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx,
+                              uint8_t disableCredBootStrap)
+{
+#ifdef BF3_OEM_COMMANDS
+    /* BF3 - send NCSI conmmand to read host state  */
+    return ipmiGetBootStrapAccountBFInternal(ctx, disableCredBootStrap, true);
+#else
+    /* BF2 - do not send NCSI conmmand to read host state  */
+    return ipmiGetBootStrapAccountBFInternal(ctx, disableCredBootStrap, false);
+#endif
 }
 
 auto ipmicmdNicGetSmartnicMode = [](ipmi::Context::ptr ctx) {
