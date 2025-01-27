@@ -64,6 +64,10 @@ option (cpu-diag-enable
 	"To support commands relevant for CPU diag"
         OFF)
 
+option (gb200nvl-oem-commands
+	"To support commands relevant only to GB200NVL"
+        OFF)
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -173,6 +177,10 @@ if(custom-oem-cmd)
 endif()
 if(cpu-diag-enable)
         add_compile_definitions(CPU_DIAG_ENABLE=${cpu-diag-enable})
+endif()
+
+if(gb200nvl-oem-commands)
+	add_compile_definitions(GB200NVL_OEM_COMMANDS=${gb200nvl-oem-commands})
 endif()
 
 if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)

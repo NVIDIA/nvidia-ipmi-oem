@@ -666,7 +666,13 @@ void controlSystemUnit(std::shared_ptr<sdbusplus::asio::connection>& dbus,
         }
     });
 }
-
+#ifdef GB200NVL_OEM_COMMANDS
+ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
+{
+    phosphor::logging::log<level::ERR>("Unsupported command");
+    return ipmi::response(ipmi::ccCommandNotAvailable);
+}
+#else
 ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
 {
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
@@ -702,6 +708,7 @@ ipmi::RspType<> ipmiSensorScanEnableDisable(uint8_t mode)
     }
     return ipmi::responseSuccess();
 }
+#endif
 
 static uint8_t getSSDLedRegister(uint8_t type, uint8_t instance,
                                  uint8_t& offset, uint8_t& mask)
