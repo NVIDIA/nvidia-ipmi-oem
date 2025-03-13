@@ -512,101 +512,6 @@ ipmi::RspType<uint8_t, std::vector<uint8_t>>
     return ipmi::responseSuccess(0x00, readBuf);
 }
 
-bool gpioUnexportLF(uint32_t gpio)
-{
-    std::ofstream unexportFile("/sys/class/gpio/unexport");
-    if (!unexportFile.is_open())
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio unexport!");
-        return false;
-    }
-    unexportFile << gpio;
-    unexportFile.close();
-    return true;
-}
-
-static int gpioExportLF(uint32_t gpio)
-{
-    if (!std::filesystem::exists("/sys/class/gpio/gpio" + std::to_string(gpio)))
-    {
-        std::ofstream exportOf("/sys/class/gpio/export", std::ofstream::out);
-        if (!exportOf.is_open())
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Failed to open gpio export!");
-            return -2;
-        }
-        exportOf << gpio;
-        exportOf.close();
-    }
-    return gpio;
-}
-
-static bool setGpioRawLF(uint32_t gpio, uint32_t value)
-{
-    int gp = gpioExportLF(gpio);
-    if (gp < 0)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to export gpio!");
-        return false;
-    }
-
-    std::ofstream directionOf("/sys/class/gpio/gpio" + std::to_string(gp) +
-                                  "/direction",
-                              std::ofstream::out);
-    if (!directionOf.is_open())
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio direction!");
-        gpioUnexportLF(gpio);
-        return false;
-    }
-    /* set to ouput, then set value */
-    directionOf << "out";
-    directionOf.close();
-    std::ofstream valueOf("/sys/class/gpio/gpio" + std::to_string(gp) +
-                              "/value",
-                          std::ofstream::out);
-    if (!valueOf.is_open())
-    {
-        directionOf.close();
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio value!");
-        gpioUnexportLF(gpio);
-        return false;
-    }
-    valueOf << value;
-    valueOf.close();
-    gpioUnexportLF(gpio);
-    return true;
-}
-
-static bool getGpioRawLF(uint32_t gpio, uint8_t& v)
-{
-    int gp = gpioExportLF(gpio);
-    if (gp < 0)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to export gpio!");
-        return false;
-    }
-    std::ifstream valueIf("/sys/class/gpio/gpio" + std::to_string(gp) +
-                              "/value",
-                          std::ifstream::in);
-    if (!valueIf.is_open())
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Failed to open gpio value!");
-        return false;
-    }
-    int r;
-    valueIf >> r;
-    v = r;
-    return true;
-}
-
 static bool DPUHardRST()
 {
     int response;
@@ -623,33 +528,6 @@ static bool DPUHardRST()
     return true;
 }
 
-static bool ipmiChangeLF(uint32_t value)
-{
-    // checks if we need to change the FNP GPIO value
-    uint8_t lfGpio = 0;
-    if (!getGpioRawLF(nvidia::liveFishGpio, lfGpio))
-    {
-        phosphor::logging::log<level::ERR>(
-            "failed to read from LIVE_FISH gpio");
-        return false;
-    }
-    if (lfGpio == value)
-    {
-        phosphor::logging::log<level::ERR>(
-            "LF GPIO is allready set, nothing to do ,aborting",
-            phosphor::logging::entry("liveFish GPIO = %lu ", value));
-        return false;
-    }
-
-    if (!setGpioRawLF(nvidia::liveFishGpio, value))
-    {
-        phosphor::logging::log<level::ERR>("failed to write to LIVE_FISH gpio");
-        return false;
-    }
-    std::cout << "LF GPIO =" << value << std::endl;
-    return true;
-}
-
 ipmi::RspType<> ipmicmdForceSocHardRst()
 {
     // force SOC_HARD_RST on the DPU
@@ -663,17 +541,12 @@ ipmi::RspType<> ipmicmdForceSocHardRst()
 
 ipmi::RspType<> ipmicmdEnterLiveFish()
 {
-    // change the livefish GPIO value to 0 and restart the SOC
-    if (!ipmiChangeLF(ipmi::nvidia::gpioLow))
+    // Call the script to enter LiveFish mode
+    int response = executeCmd("/usr/sbin/mlnx_bf_reset_control",
+                              "enter_livefish");
+    if (response)
     {
-        phosphor::logging::log<level::ERR>("Failed to enter to liveFish mode");
-        return ipmi::responseResponseError();
-    }
-    // force SOC_HARD_RST on the DPU
-    if (!DPUHardRST())
-    {
-        phosphor::logging::log<level::ERR>(
-            "Command failed, SOC_HARD_RST failed ");
+        phosphor::logging::log<level::ERR>("Failed to enter LiveFish mode");
         return ipmi::responseResponseError();
     }
     return ipmi::responseSuccess();
@@ -681,19 +554,12 @@ ipmi::RspType<> ipmicmdEnterLiveFish()
 
 ipmi::RspType<> ipmicmdExitLiveFish()
 {
-    // change the livefish GPIO value to 1 and restart the SOC
-    if (!ipmiChangeLF(ipmi::nvidia::gpioHigh))
+    // Call the script to exit LiveFish mode
+    int response = executeCmd("/usr/sbin/mlnx_bf_reset_control",
+                              "exit_livefish");
+    if (response)
     {
-        phosphor::logging::log<level::ERR>("Failed to exit from liveFish mode");
-        return ipmi::responseResponseError();
-    }
-
-    // force SOC_HARD_RST on the DPU
-    if (!DPUHardRST())
-    {
-        phosphor::logging::log<level::ERR>(
-            "Command failed, SOC_HARD_RST failed ");
-
+        phosphor::logging::log<level::ERR>("Failed to exit LiveFish mode");
         return ipmi::responseResponseError();
     }
     return ipmi::responseSuccess();
