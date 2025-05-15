@@ -387,7 +387,7 @@ void startMatch(void)
         {
             return;
         }
-        boost::asio::spawn(*getIoContext(),
+        auto spawnResult = boost::asio::spawn(*getIoContext(),
                            [](boost::asio::yield_context yield) {
             replaceCacheFru(getSdBus(), yield);
         });
@@ -418,7 +418,7 @@ void startMatch(void)
         {
             return;
         }
-        boost::asio::spawn(*getIoContext(),
+        auto spawnResult = boost::asio::spawn(*getIoContext(),
                            [](boost::asio::yield_context yield) {
             replaceCacheFru(getSdBus(), yield);
         });

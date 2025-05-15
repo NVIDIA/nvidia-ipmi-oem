@@ -19,7 +19,6 @@
 
 #include "gh-config.hpp"
 
-#include <bits/stdc++.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
@@ -50,6 +49,11 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <regex>
+#include <random>
 
 // IPMI OEM Major and Minor version
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
