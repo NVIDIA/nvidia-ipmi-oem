@@ -897,28 +897,11 @@ ipmi::RspType<uint8_t>
  * @returns RspType - response return  */
 ipmi::RspType<uint8_t> ipmiOemNotifyDpuBoot(ipmi::Context::ptr ctx)
 {
-    try
-    {
-        uint64_t timeValue(
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch())
-                .count());
-        std::variant<uint64_t> variantTimeValue(timeValue);
-        auto method =
-            ctx->bus->new_method_call("xyz.openbmc_project.State.Host",
-                                      "/xyz/openbmc_project/state/host0",
-                                      "org.freedesktop.DBus.Properties", "Set");
-        method.append("xyz.openbmc_project.State.Boot.Progress",
-                      "BootProgressLastUpdate", variantTimeValue);
-        auto reply = ctx->bus->call(method);
-        return ipmi::responseSuccess();
-    }
-    catch (const std::exception& e)
-    {
-        log<level::ERR>("ipmiOemSyncDpuVersion error",
-                        entry("ERROR=%s", e.what()));
-        return ipmi::response(ipmi::ccResponseError);
-    }
+    // This implementation was removed because now we monitor GPIO changes
+    // during ARM boot with the soft-reset manager, and update the
+    // BootProgressLastUpdate property accordingly, providing more accurate boot
+    // progress tracking through hardware signals rather than waiting for the
+    // UEFI to call this command.
 }
 
 ipmi::RspType<uint8_t> ipmicmdTorSwitchGetMode(ipmi::Context::ptr ctx)
