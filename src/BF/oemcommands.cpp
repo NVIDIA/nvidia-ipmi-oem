@@ -902,6 +902,7 @@ ipmi::RspType<uint8_t> ipmiOemNotifyDpuBoot(ipmi::Context::ptr ctx)
     // BootProgressLastUpdate property accordingly, providing more accurate boot
     // progress tracking through hardware signals rather than waiting for the
     // UEFI to call this command.
+    return ipmi::responseSuccess();
 }
 
 ipmi::RspType<uint8_t> ipmicmdTorSwitchGetMode(ipmi::Context::ptr ctx)
