@@ -1498,41 +1498,69 @@ bool getRandomUserName(std::string& uniqueStr)
     randFp.close();
     return true;
 }
+
 std::string getRandomPassword()
 {
-    std::string uniqueStr;
-    uniqueStr.reserve(12);
+    std::string uniqueStr{};
+    constexpr size_t pwLen = 16;
+    uniqueStr.reserve(pwLen);
     std::random_device rd;
-    std::mt19937 generator(
-        rd()); // Standard mersenne_twister_engine seeded with rd()
+    std::mt19937 generator(rd());
 
-    const std::string_view upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const std::string_view lower = "abcdefghijklmnopqrstuvwxyz";
-    const std::string_view integers = "0123456789";
-    const std::string_view punctuation = "@!_:^~";
+    constexpr std::array<std::string_view, 4> charsets = {{
+        {"ABCDEFGHIJKLMNOPQRSTUVWXYZ"},
+        {"abcdefghijklmnopqrstuvwxyz"},
+        {"0123456789"},
+        {"!#$%&()*+,-./:;<=>?@[]^_{|}~"},
+    }};
+    std::uniform_real_distribution<> distribution(0, 1);
+    std::bitset<charsets.size()> charClasses{};
     char lastChar = '\0';
-    for (auto& charset : {upper, lower, integers, punctuation})
+    while (uniqueStr.size() < pwLen)
     {
-        for (int i = 0; i < 4; i++)
+        std::string charset{};
+        // select character classes based on previously seen or not
+        for (size_t i = 0; i < charsets.size(); i++)
         {
-            // Create a distribution to uniformly select from all
-            // characters
-            std::uniform_int_distribution<> distribution(0, charset.size() - 1);
-
-            // Generate the random string
-
-            while (true)
+            if (!charClasses[i] || charClasses.all())
             {
-                char newChar = charset[distribution(generator)];
-                if (lastChar != newChar)
+                charset += charsets[i];
+            }
+        }
+        // Create a distribution to uniformly select from chosen charset
+        char newChar{};
+        while (true)
+        {
+            newChar = charset[static_cast<size_t>(
+                floor(charset.size() * distribution(generator)))];
+            if (uniqueStr.find(newChar) != std::string::npos)
+            {
+                continue;
+            }
+            if (abs(lastChar - newChar) > 1)
+            {
+                uniqueStr += newChar;
+                lastChar = newChar;
+                break;
+            }
+        }
+        // keep track of which charset requirements have been met
+        for (size_t i = 0; i < charsets.size(); i++)
+        {
+            if (!charClasses[i])
+            {
+                if (charsets[i].find(newChar) != std::string_view::npos)
                 {
-                    uniqueStr += newChar;
-                    break;
+                    charClasses[i] = 1;
                 }
             }
         }
+        if (charClasses.all() &&
+            (uniqueStr.size() <= (pwLen - charClasses.size())))
+        {
+            charClasses.reset();
+        }
     }
-    std::shuffle(uniqueStr.begin(), uniqueStr.end(), generator);
     return uniqueStr;
 }
 
