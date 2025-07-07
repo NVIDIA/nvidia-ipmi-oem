@@ -22,7 +22,6 @@
 #include "oemcommandsBF.hpp"
 
 #include <arpa/inet.h>
-#include <bits/stdc++.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
@@ -33,7 +32,7 @@
 #include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/process/child.hpp>
+#include <boost/process/v1/child.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
@@ -53,6 +52,11 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <regex>
+#include <random>
 
 #define MAX_ENTRIES_PER_LOGTYPE 10
 #define IPV4_ADDR_SIZE 4

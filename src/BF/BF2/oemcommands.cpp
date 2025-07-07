@@ -21,7 +21,6 @@
 #include "dgx-a100-config.hpp"
 #include "oemcommandsBF.hpp"
 
-#include <bits/stdc++.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
@@ -32,7 +31,7 @@
 #include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/process/child.hpp>
+#include <boost/process/v1/child.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
@@ -48,6 +47,10 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <regex>
 
 void registerNvOemPlatformFunctionsBF2() __attribute__((constructor(103)));
 

@@ -20,7 +20,6 @@
 #include "biosversionutils.hpp"
 #include "dgx-a100-config.hpp"
 
-#include <bits/stdc++.h>
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
 #include <linux/i2c.h>
@@ -32,7 +31,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/container/flat_map.hpp>
-#include <boost/process/child.hpp>
+#include <boost/process/v1/child.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
@@ -49,6 +48,10 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <regex>
 
 // Network object in dbus
 const char* networkService = "xyz.openbmc_project.Network";
