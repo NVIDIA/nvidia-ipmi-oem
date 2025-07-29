@@ -46,14 +46,14 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <random>
+#include <regex>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <regex>
-#include <random>
 
 // IPMI OEM Major and Minor version
 static constexpr uint8_t OEM_MAJOR_VER = 0x01;
@@ -1681,8 +1681,7 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                             "failed");
                         return;
                     }
-                },
-                    service.c_str(),
+                }, service.c_str(),
                     std::string(userMgrObjBasePath)
                         .append("/")
                         .append(userName),

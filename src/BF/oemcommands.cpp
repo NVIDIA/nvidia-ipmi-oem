@@ -46,17 +46,17 @@
 #include <array>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <memory>
+#include <random>
+#include <regex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <regex>
-#include <random>
 
 #define MAX_ENTRIES_PER_LOGTYPE 10
 #define IPV4_ADDR_SIZE 4
@@ -1741,8 +1741,7 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
                 "Error returns from call to dbus. delete user failed");
             return;
         }
-    },
-        ipmi::accountService.c_str(),
+    }, ipmi::accountService.c_str(),
         std::string(userMgrObjBasePath)
             .append("/")
             .append(
@@ -2283,8 +2282,7 @@ static ipmi::RspType<std::vector<uint8_t>>
                                              propertyName);
 
             /* Finds the type of each property */
-            std::visit(
-                [&](auto&& arg) {
+            std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (std::is_same_v<T, bool> ||
                               std::is_same_v<T, std::string> ||
@@ -2292,8 +2290,7 @@ static ipmi::RspType<std::vector<uint8_t>>
                 {
                     value = arg;
                 }
-            },
-                val);
+            }, val);
 
             properties[propertyName] = value;
         }
@@ -2555,8 +2552,7 @@ ipmi::RspType<uint8_t> ipmiSetRsyslogStatus(ipmi::Context::ptr ctx,
                     ipmi::getDbusProperty(*dbus, objInfo.second, objInfo.first,
                                           rsyslogFwdInterface, propertyName);
 
-                std::visit(
-                    [&](auto&& arg) {
+                std::visit([&](auto&& arg) {
                     using T = std::decay_t<decltype(arg)>;
                     if constexpr (std::is_same_v<T, bool> ||
                                   std::is_same_v<T, std::string> ||
@@ -2564,8 +2560,7 @@ ipmi::RspType<uint8_t> ipmiSetRsyslogStatus(ipmi::Context::ptr ctx,
                     {
                         curValue = arg;
                     }
-                },
-                    val);
+                }, val);
 
                 /* Sets a new value only if it is different than the current one
                  */

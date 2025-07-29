@@ -44,14 +44,14 @@
 #include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
 #include <random>
+#include <regex>
+#include <sstream>
 #include <string>
 #include <tuple>
 #include <vector>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <regex>
 
 // Network object in dbus
 const char* networkService = "xyz.openbmc_project.Network";
