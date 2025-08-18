@@ -133,6 +133,14 @@ static constexpr const char* networkObj = "/xyz/openbmc_project/network";
 static constexpr const char* networkResetIntf =
     "xyz.openbmc_project.Common.FactoryReset";
 
+// ObjectMapper service constants
+static constexpr const char* objectMapperService =
+    "xyz.openbmc_project.ObjectMapper";
+static constexpr const char* objectMapperPath =
+    "/xyz/openbmc_project/object_mapper";
+static constexpr const char* objectMapperInterface =
+    "xyz.openbmc_project.ObjectMapper";
+
 static const std::vector<std::string> nicExternalHostPrivileges = {
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FLASH_ACCESS",
     "/xyz/openbmc_project/network/connectx/external_host_privileges/external_host_privileges/HOST_PRIV_FW_UPDATE",
@@ -245,6 +253,41 @@ using BasicVariantType = std::variant<std::string>;
 using PropertyMapType =
     boost::container::flat_map<std::string, BasicVariantType>;
 
+namespace ipmi
+{
+const int BOOTSTRAP_PASSWORD_SIZE = 16;
+
+#ifdef BF3_OEM_COMMANDS
+struct userInfo
+{
+    const std::string name;
+    std::string password;
+    const std::vector<uint8_t> respUserNameBuf;
+    const std::vector<std::string> group;
+    const std::string priv;
+    std::vector<uint8_t> respPasswordBuf;
+};
+
+static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
+userInfo uefiAccount = {
+    .name = "NvBluefieldUefi",
+    .password = "",
+    .respUserNameBuf = {{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd',
+                         'U', 'e', 'f', 'i', '\0'}},
+    .group = {"redfish-hostiface"},
+    .priv = "priv-admin",
+    .respPasswordBuf = {}};
+
+userInfo dpuOsAccount = {
+    .name = "NvBluefieldDPUOS",
+    .password = "",
+    .respUserNameBuf = {{'N', 'v', 'B', 'l', 'u', 'e', 'f', 'i', 'e', 'l', 'd',
+                         'D', 'P', 'U', 'O', 'S'}},
+    .group = {},
+    .priv = "priv-operator",
+    .respPasswordBuf = {}};
+
+#elif BF2_OEM_COMMANDS
 struct userInfo
 {
     std::string name;
@@ -257,10 +300,7 @@ struct userInfoBuf
     std::vector<uint8_t> respPasswordBuf;
 };
 
-namespace ipmi
-{
 constexpr int BOOTSTRAP_ACCOUNTS_NUM = 2;
-const int BOOTSTRAP_PASSWORD_SIZE = 16;
 static constexpr Cc ipmiCCBootStrappingDisabled = 0x80;
 std::array<userInfo, BOOTSTRAP_ACCOUNTS_NUM> userDatabase = {
     {{"NvBluefieldUefi0", ""}, {"NvBluefieldUefi1", ""}}};
@@ -275,6 +315,7 @@ std::array<userInfoBuf, 2> userDatabaseBuff = {
 
 std::atomic_flag atomicFlag = ATOMIC_FLAG_INIT;
 static int BootStrapCurrentUserIndex = 0;
+#endif
 static std::string accountService;
 
 template <typename... ArgTypes>
@@ -299,7 +340,12 @@ std::pair<std::string, int> executeCommand(const char* command,
 {
     std::array<char, 128> buffer;
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command, "r"), pclose);
+    auto pipeDeleter = [](FILE* fp) {
+        if (fp)
+            pclose(fp);
+    };
+    std::unique_ptr<FILE, decltype(pipeDeleter)> pipe(popen(command, "r"),
+                                                      pipeDeleter);
     if (!pipe)
     {
         throw std::runtime_error("Failed executing command: " +
@@ -1093,7 +1139,7 @@ static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
                               biosConfigMgrIface, "CredentialBootstrap",
                               bool(true));
         phosphor::logging::log<phosphor::logging::level::INFO>(
-            "setCredentialBootStrap: Disable CredentialBootstrapping"
+            "setCredentialBootStrap: Enable CredentialBootstrapping"
             "property set to true");
     }
     else
@@ -1318,6 +1364,18 @@ static bool getRandomPassword(std::string& uniqueStr)
             return false;
         }
         passwordIsValid = isValidPassword(uniqueStr);
+
+        if (uniqueStr.size() != BOOTSTRAP_PASSWORD_SIZE)
+        {
+            passwordIsValid = false;
+            phosphor::logging::log<level::ERR>(
+                ("getRandomPassword: Invalid password is " + uniqueStr)
+                    .c_str());
+            phosphor::logging::log<level::ERR>(
+                ("getRandomPassword: Invalid password length. actual length is " +
+                 std::to_string(uniqueStr.size()))
+                    .c_str());
+        }
         max_retries--;
     }
 
@@ -1330,6 +1388,7 @@ static bool getRandomPassword(std::string& uniqueStr)
     return true;
 }
 
+#ifdef BF2_OEM_COMMANDS
 // Get the bootstrap username at the specified index
 static std::string getBootstrapUserName(int index)
 {
@@ -1358,6 +1417,7 @@ static void SetBootstrapPassword(int index, std::string password)
         ipmi::userDatabase[index].password = password;
     }
 }
+#endif
 
 #ifdef BF3_OEM_COMMANDS
 
@@ -1440,126 +1500,6 @@ ipmi::RspType<> ipmiSystemFactoryResetBF(boost::asio::yield_context yield)
 }
 #endif
 
-static ipmi::RspType<>
-    ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
-                                 uint8_t disableCredBootStrap, uint8_t index)
-{
-    int accountIndex = static_cast<int>(index);
-    phosphor::logging::log<phosphor::logging::level::INFO>(
-        "ipmiCreateBootStrapAccountBF start");
-    try
-    {
-        if (accountIndex > BOOTSTRAP_ACCOUNTS_NUM)
-        {
-            phosphor::logging::log<level::ERR>(
-                "ipmiCreateBootStrapAccountBF: Invalid index");
-            return ipmi::responseResponseError();
-        }
-
-        // Check the CredentialBootstrapping property status,
-        // if disabled, then reject the command with success code.
-        bool isCredentialBooStrapSet = getCredentialBootStrap();
-        if (!isCredentialBooStrapSet)
-        {
-            phosphor::logging::log<level::ERR>(
-                "ipmiCreateBootStrapAccountBF: Credential BootStrapping Disabled "
-                "Get BootStrap Account command rejected.");
-            return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
-        }
-
-        // Get username from DB
-        std::string userName = ipmi::getBootstrapUserName(accountIndex);
-        std::string password;
-        if (!getRandomPassword(password))
-        {
-            phosphor::logging::log<level::ERR>(
-                "ipmiCreateBootStrapAccountBF: Failed to generate valid Password");
-            return ipmi::responseResponseError();
-        }
-        // save password at the DB
-        ipmi::SetBootstrapPassword(accountIndex, password);
-
-        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-        ipmi::accountService = getService(*dbus, userMgrInterface,
-                                          userMgrObjBasePath);
-
-        // create the new user with only redfish-hostiface group access
-        auto method = dbus->new_method_call(ipmi::accountService.c_str(),
-                                            userMgrObjBasePath,
-                                            userMgrInterface, createUserMethod);
-        method.append(userName, std::vector<std::string>{"redfish-hostiface"},
-                      "priv-admin", true);
-        auto reply = dbus->call(method);
-        if (reply.is_method_error())
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "Error returns from call to dbus. BootStrap Failed");
-            return ipmi::responseResponseError();
-        }
-
-        // update the password
-        boost::system::error_code ec;
-        int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
-        if (retval != PAM_SUCCESS)
-        {
-            dbus->yield_method_call<void>(
-                ctx->yield, ec, ipmi::accountService.c_str(),
-                userMgrObjBasePath + userName, usersDeleteIface, "Delete");
-
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "ipmiCreateBootStrapAccountBF : Failed to update password.");
-            return ipmi::responseUnspecifiedError();
-        }
-        else
-        {
-            // update the "CredentialBootstrap" Dbus property w.r.to
-            // disable crendential BootStrap status
-            setCredentialBootStrap(disableCredBootStrap);
-            ipmi::userDatabaseBuff[accountIndex].respPasswordBuf.clear();
-            std::copy(
-                password.begin(), password.end(),
-                std::back_inserter(
-                    ipmi::userDatabaseBuff[accountIndex].respPasswordBuf));
-            /* release atomic flag */
-            atomicFlag.clear(std::memory_order_release);
-            phosphor::logging::log<level::INFO>(
-                "ipmiCreateBootStrapAccountBF:  unlocked account.");
-            phosphor::logging::log<phosphor::logging::level::INFO>(
-                "ipmiCreateBootStrapAccountBF end");
-            return ipmi::responseSuccess();
-        }
-    }
-    catch (const std::exception& e)
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "ipmiCreateBootStrapAccountBF : Failed to generate BootStrap Account "
-            "Credentials");
-        return ipmi::responseResponseError();
-    }
-}
-
-/**
- * @brief Acquires an atomic lock.
- *
- * This function attempts to acquire an atomic lock using a spin lock mechanism.
- * If the lock is already held -1 is returned to indicate failure.
- * If the lock is successfully acquired, 0 is returned to indicate success.
- *
- * @return 0 on success, -1 on failure.
- */
-
-static int atomicLock()
-{
-    if (atomicFlag.test_and_set(std::memory_order_acquire))
-    {
-        phosphor::logging::log<level::INFO>("atomicLock:already locked.");
-        return -1;
-    };
-
-    phosphor::logging::log<level::INFO>("atomicLock:locked taken.");
-    return 0;
-}
-
 // read property return value as int, using propertyInfo to map string
 // property to int, regarding negative as error
 static int readPropToInt(ipmi::Context::ptr ctx, const char* service,
@@ -1629,6 +1569,316 @@ ipmi::RspType<uint8_t> simplePropertyGet(ipmi::Context::ptr ctx,
     }
 }
 
+static bool isUefiState(ipmi::Context::ptr ctx)
+{
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "isUefiState: send NCSI command.");
+    auto result = simplePropertyGet(
+        ctx, connectxSevice, connectxSmartnicOsState, smartNicOsStateInfo);
+
+    // Extract response code and property value tuple
+    auto responseCode = std::get<0>(result);
+    auto optionalResult = std::get<1>(result);
+
+    // heck if the response is not success or if the value is null
+    if (responseCode != ipmi::ccSuccess || !optionalResult)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "isUefiState: simplePropertyGet failed or returned invalid response code.");
+        // Credential bootstrapping via IPMI commands is disabled
+        return false;
+    }
+
+    auto value = std::get<0>(optionalResult.value());
+
+    if (value != NIC_OS_STATE_BL31 && value != NIC_OS_STATE_UEFI)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            ("isUefiState: simplePropertyGet returned unexpected value." +
+             std::to_string(value))
+                .c_str());
+        return false;
+    }
+    return true;
+}
+
+#ifdef BF3_OEM_COMMANDS
+static void getUserPaths(std::shared_ptr<sdbusplus::asio::connection> dbus,
+                         std::vector<std::string>& userNames)
+{
+    try
+    {
+        auto method =
+            dbus->new_method_call(objectMapperService, objectMapperPath,
+                                  objectMapperInterface, "GetSubTreePaths");
+        method.append(
+            userMgrObjBasePath, 1,
+            std::vector<std::string>{"xyz.openbmc_project.User.Attributes"});
+        std::vector<std::string> userPaths;
+        auto reply = dbus->call(method);
+        reply.read(userPaths);
+
+        // Now userPaths contains all user paths
+        for (const auto& userPath : userPaths)
+        {
+            std::string userName =
+                userPath.substr(userPath.find_last_of('/') + 1);
+            userNames.push_back(userName); // ADD THIS LINE
+        }
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<level::ERR>(
+            "Failed to get user paths",
+            phosphor::logging::entry("ERROR=%s", e.what()));
+    }
+}
+
+static ipmi::RspType<> ipmiCreateAccountBF(ipmi::Context::ptr ctx,
+                                           userInfo& accountInfo)
+{
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiCreateAccountBF start");
+
+    try
+    {
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        std::vector<std::string> userNames;
+        getUserPaths(dbus, userNames);
+        ipmi::accountService = getService(*dbus, userMgrInterface,
+                                          userMgrObjBasePath);
+
+        if (std::find(userNames.begin(), userNames.end(), accountInfo.name) !=
+                userNames.end() &&
+            accountInfo.password.empty())
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateAccountBF: Password is not saved in RAM. Deleting user before creating new one.");
+            // The password is saved in RAM. If BMC is resetting, the password
+            // is lost and cannot be send to UEFI. In this case need to delete
+            // the user and create a new account
+            std::string userPath = std::string(userMgrObjBasePath) + "/" +
+                                   accountInfo.name;
+            phosphor::logging::log<level::ERR>(
+                ("ipmiCreateAccountBF: Deleting user " + userPath).c_str());
+            auto deleteMethod = dbus->new_method_call(
+                ipmi::accountService.c_str(), userPath.c_str(),
+                usersDeleteIface, "Delete");
+            auto reply = dbus->call(deleteMethod);
+            if (reply.is_method_error())
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "ipmiCreateAccountBF: Error returns from call to dbus. Failed to delete user.");
+                return ipmi::responseResponseError();
+            }
+        }
+
+        // create the new user with only redfish-hostiface group access
+        auto method = dbus->new_method_call(ipmi::accountService.c_str(),
+                                            userMgrObjBasePath,
+                                            userMgrInterface, createUserMethod);
+        method.append(accountInfo.name, accountInfo.group, accountInfo.priv,
+                      true);
+        auto reply = dbus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiCreateAccountBF: Error returns from call to dbus. BootStrap Failed");
+            return ipmi::responseResponseError();
+        }
+        accountInfo.password = "";
+        if (!getRandomPassword(accountInfo.password))
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateAccountBF: Failed to generate valid Password");
+            return ipmi::responseResponseError();
+        }
+        // update the password
+        boost::system::error_code ec;
+        int retval = pamUpdatePasswd(accountInfo.name.c_str(),
+                                     accountInfo.password.c_str());
+        if (retval != PAM_SUCCESS)
+        {
+            std::string userPath = std::string(userMgrObjBasePath) + "/" +
+                                   accountInfo.name;
+            dbus->yield_method_call<void>(
+                ctx->yield, ec, ipmi::accountService.c_str(), userPath.c_str(),
+                usersDeleteIface, "Delete");
+
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiCreateAccountBF : Failed to update password.");
+            return ipmi::responseUnspecifiedError();
+        }
+        else
+        {
+            accountInfo.respPasswordBuf.clear();
+            std::copy(accountInfo.password.begin(), accountInfo.password.end(),
+                      std::back_inserter(accountInfo.respPasswordBuf));
+            return ipmi::responseSuccess();
+        }
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiCreateAccountBF: Failed to generate BootStrap Account "
+            "Credentials");
+        return ipmi::responseResponseError();
+    }
+}
+
+ipmi::RspType<> ipmiCreateDpuOsAccountBF(ipmi::Context::ptr ctx,
+                                         uint8_t disableCredBootStrap)
+{
+    if (ctx->channel != localChannel)
+    {
+        log<level::ERR>(
+            "ipmiCreateDpuOsAccountBF: Running the command is allowed only from BMC");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiCreateDpuOsAccountBF start");
+    return ipmiCreateAccountBF(ctx, dpuOsAccount);
+}
+
+static ipmi::RspType<>
+    ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
+                                 uint8_t disableCredBootStrap)
+{
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiCreateDpuOsAccountBF start");
+    if (ctx->channel != localChannel)
+    {
+        log<level::ERR>(
+            "ipmiCreateBootStrapAccountBF: Running the command is allowed only from BMC");
+        return ipmi::response(ipmi::ccResponseError);
+    }
+    try
+    {
+        // Check the CredentialBootstrapping property status,
+        // if disabled, then reject the command with success code.
+        bool isCredentialBooStrapSet = getCredentialBootStrap();
+        if (!isCredentialBooStrapSet)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateDpuOsAccountBF: Credential BootStrapping Disabled "
+                "Get BootStrap Account command rejected.");
+            return ipmi::response(ipmi::ipmiCCBootStrappingDisabled);
+        }
+        // update the "CredentialBootstrap" Dbus property w.r.to
+        // disable crendential BootStrap status
+        setCredentialBootStrap(disableCredBootStrap);
+        return ipmiCreateAccountBF(ctx, uefiAccount);
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiCreateDpuOsAccountBF : Failed to generate DPU OS Account "
+            "Credentials");
+        return ipmi::responseResponseError();
+    }
+}
+#elif BF2_OEM_COMMANDS
+
+static ipmi::RspType<>
+    ipmiCreateBootStrapAccountBF(ipmi::Context::ptr ctx,
+                                 uint8_t disableCredBootStrap, uint8_t index)
+{
+    int accountIndex = static_cast<int>(index);
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiCreateBootStrapAccountBF start");
+    try
+    {
+        if (accountIndex > BOOTSTRAP_ACCOUNTS_NUM)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateBootStrapAccountBF: Invalid index");
+            return ipmi::responseResponseError();
+        }
+
+        // Check the CredentialBootstrapping property status,
+        // if disabled, then reject the command with success code.
+        bool isCredentialBooStrapSet = getCredentialBootStrap();
+        if (!isCredentialBooStrapSet)
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateBootStrapAccountBF: Credential BootStrapping Disabled "
+                "Get BootStrap Account command rejected.");
+            return ipmi::response(ipmiCCBootStrappingDisabled);
+        }
+
+        // Get username from DB
+        std::string userName = getBootstrapUserName(accountIndex);
+        std::string password;
+        if (!getRandomPassword(password))
+        {
+            phosphor::logging::log<level::ERR>(
+                "ipmiCreateBootStrapAccountBF: Failed to generate valid Password");
+            return ipmi::responseResponseError();
+        }
+        // save password at the DB
+        SetBootstrapPassword(accountIndex, password);
+
+        std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+        ipmi::accountService = getService(*dbus, userMgrInterface,
+                                          userMgrObjBasePath);
+
+        // create the new user with only redfish-hostiface group access
+        auto method = dbus->new_method_call(ipmi::accountService.c_str(),
+                                            userMgrObjBasePath,
+                                            userMgrInterface, createUserMethod);
+        method.append(userName, std::vector<std::string>{"redfish-hostiface"},
+                      "priv-admin", true);
+        auto reply = dbus->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error returns from call to dbus. BootStrap Failed");
+            return ipmi::responseResponseError();
+        }
+
+        // update the password
+        boost::system::error_code ec;
+        int retval = pamUpdatePasswd(userName.c_str(), password.c_str());
+        if (retval != PAM_SUCCESS)
+        {
+            std::string userPath = std::string(userMgrObjBasePath) + "/" +
+                                   userName;
+            dbus->yield_method_call<void>(
+                ctx->yield, ec, ipmi::accountService.c_str(), userPath.c_str(),
+                usersDeleteIface, "Delete");
+
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "ipmiCreateBootStrapAccountBF : Failed to update password.");
+            return ipmi::responseUnspecifiedError();
+        }
+        else
+        {
+            // update the "CredentialBootstrap" Dbus property w.r.to
+            // disable crendential BootStrap status
+            setCredentialBootStrap(disableCredBootStrap);
+            userDatabaseBuff[accountIndex].respPasswordBuf.clear();
+            std::copy(password.begin(), password.end(),
+                      std::back_inserter(
+                          userDatabaseBuff[accountIndex].respPasswordBuf));
+            /* release atomic flag */
+            atomicFlag.clear(std::memory_order_release);
+            phosphor::logging::log<level::INFO>(
+                "ipmiCreateBootStrapAccountBF:  unlocked account.");
+            phosphor::logging::log<phosphor::logging::level::INFO>(
+                "ipmiCreateBootStrapAccountBF end");
+            return ipmi::responseSuccess();
+        }
+    }
+    catch (const std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiCreateBootStrapAccountBF : Failed to generate BootStrap Account "
+            "Credentials");
+        return ipmi::responseResponseError();
+    }
+}
+#endif
+
 ipmi::RspType<> simplePropertySet(ipmi::Context::ptr ctx, const char* service,
                                   const char* obj,
                                   const PropertyInfo& propertyInfo, int input)
@@ -1652,44 +1902,66 @@ ipmi::RspType<> simplePropertySet(ipmi::Context::ptr ctx, const char* service,
     }
 }
 
+#ifdef BF3_OEM_COMMANDS
 static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBFInternal(ipmi::Context::ptr ctx,
-                                      uint8_t disableCredBootStrap,
-                                      bool useNcsi)
+                                      uint8_t disableCredBootStrap)
 {
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "ipmiGetBootStrapAccountBFInternal start");
 
-    if (useNcsi)
+    if (!isUefiState(ctx))
     {
-        phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ipmiGetBootStrapAccountBFInternal: send NCSI command.");
-        auto result = simplePropertyGet(
-            ctx, connectxSevice, connectxSmartnicOsState, smartNicOsStateInfo);
-
-        /* Extract response code and property value tuple */
-        auto responseCode = std::get<0>(result);
-        auto optionalResult = std::get<1>(result);
-
-        /* Check if the response is not success or if the value is null */
-        if (responseCode != ipmi::ccSuccess || !optionalResult)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "ipmiGetBootStrapAccountBFInternal: simplePropertyGet failed or returned invalid response code.");
-            /* Credential bootstrapping via IPMI commands is disabled */
-            return ipmi::responseResponseError();
-        }
-
-        auto value = std::get<0>(optionalResult.value());
-
-        if (value != NIC_OS_STATE_BL31 && value != NIC_OS_STATE_UEFI)
-        {
-            phosphor::logging::log<phosphor::logging::level::ERR>(
-                "ipmiGetBootStrapAccountBFInternal: simplePropertyGet returned unexpected value.",
-                phosphor::logging::entry("OS_STATE= %u", value));
-            return ipmi::responseResponseError();
-        }
+        return ipmi::responseResponseError();
     }
+    auto ret = ipmi::responseSuccess(uefiAccount.respUserNameBuf,
+                                     uefiAccount.respPasswordBuf);
+    return ret;
+}
+
+static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
+    ipmiGetDpuOsAccountBF(ipmi::Context::ptr ctx)
+{
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiGetDpuOsAccountBF start");
+    if (!isUefiState(ctx))
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiGetDpuOsAccountBF: not in UEFI state");
+        return ipmi::responseResponseError();
+    }
+    return ipmi::responseSuccess(dpuOsAccount.respUserNameBuf,
+                                 dpuOsAccount.respPasswordBuf);
+}
+
+#elif BF2_OEM_COMMANDS
+/**
+ * @brief Acquires an atomic lock.
+ *
+ * This function attempts to acquire an atomic lock using a spin lock mechanism.
+ * If the lock is already held -1 is returned to indicate failure.
+ * If the lock is successfully acquired, 0 is returned to indicate success.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+static int atomicLock()
+{
+    if (atomicFlag.test_and_set(std::memory_order_acquire))
+    {
+        phosphor::logging::log<level::INFO>("atomicLock:already locked.");
+        return -1;
+    };
+
+    phosphor::logging::log<level::INFO>("atomicLock:locked taken.");
+    return 0;
+}
+
+static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
+    ipmiGetBootStrapAccountBFInternal(ipmi::Context::ptr ctx,
+                                      uint8_t disableCredBootStrap)
+{
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "ipmiGetBootStrapAccountBFInternal start");
 
     if (atomicLock() < 0)
     {
@@ -1697,10 +1969,10 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
             "ipmiGetBootStrapAccountBFInternal: atomic flag is set");
 
         /* Returns the previous account. Processing is not complete yet. */
-        int prevUserIndex = ipmi::BootStrapCurrentUserIndex == 1 ? 0 : 1;
+        int prevUserIndex = BootStrapCurrentUserIndex == 1 ? 0 : 1;
 
         size_t passwordSize =
-            ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf.size();
+            userDatabaseBuff[prevUserIndex].respPasswordBuf.size();
 
         if (passwordSize != BOOTSTRAP_PASSWORD_SIZE)
         {
@@ -1711,14 +1983,13 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         }
 
         auto ret = ipmi::responseSuccess(
-            ipmi::userDatabaseBuff[prevUserIndex].respUserNameBuf,
-            ipmi::userDatabaseBuff[prevUserIndex].respPasswordBuf);
+            userDatabaseBuff[prevUserIndex].respUserNameBuf,
+            userDatabaseBuff[prevUserIndex].respPasswordBuf);
         return ret;
     }
     // Remove the following account, and the bootstrap manager will recreate it.
     size_t passwordSize =
-        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex]
-            .respPasswordBuf.size();
+        userDatabaseBuff[BootStrapCurrentUserIndex].respPasswordBuf.size();
 
     if (passwordSize != BOOTSTRAP_PASSWORD_SIZE)
     {
@@ -1728,12 +1999,10 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         return ipmi::responseResponseError();
     }
     auto ret = ipmi::responseSuccess(
-        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex].respUserNameBuf,
-        ipmi::userDatabaseBuff[ipmi::BootStrapCurrentUserIndex]
-            .respPasswordBuf);
+        userDatabaseBuff[BootStrapCurrentUserIndex].respUserNameBuf,
+        userDatabaseBuff[BootStrapCurrentUserIndex].respPasswordBuf);
     // Switch current account
-    ipmi::BootStrapCurrentUserIndex = ipmi::BootStrapCurrentUserIndex == 0 ? 1
-                                                                           : 0;
+    BootStrapCurrentUserIndex = BootStrapCurrentUserIndex == 0 ? 1 : 0;
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
 
     dbus->async_method_call(
@@ -1747,24 +2016,22 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     }, ipmi::accountService.c_str(),
         std::string(userMgrObjBasePath)
             .append("/")
-            .append(
-                ipmi::getBootstrapUserName(ipmi::BootStrapCurrentUserIndex)),
+            .append(getBootstrapUserName(BootStrapCurrentUserIndex)),
         usersDeleteIface, "Delete");
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "ipmiGetBootStrapAccountBFInternal end");
     return ret;
 }
 
+#endif
 static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx,
                               uint8_t disableCredBootStrap)
 {
-#ifdef BF3_OEM_COMMANDS
-    /* BF3 - send NCSI conmmand to read host state  */
-    return ipmiGetBootStrapAccountBFInternal(ctx, disableCredBootStrap, true);
+#if defined(BF3_OEM_COMMANDS) || defined(BF2_OEM_COMMANDS)
+    return ipmiGetBootStrapAccountBFInternal(ctx, disableCredBootStrap);
 #else
-    /* BF2 - do not send NCSI conmmand to read host state  */
-    return ipmiGetBootStrapAccountBFInternal(ctx, disableCredBootStrap, false);
+    return ipmi::responseResponseError();
 #endif
 }
 
@@ -3090,6 +3357,7 @@ void registerNvOemPlatformFunctions()
                                ipmi::nvidia::misc::cmdGetBootStrapAccount,
                                ipmi::Privilege::sysIface,
                                ipmi::ipmiGetBootStrapAccountBF);
+
     // <Initialized Bootstrap Account Credentials>
     log<level::NOTICE>(
         "Registering ", entry("GrpExt:[%02Xh], ", ipmi::nvidia::netGroupExt),
@@ -3099,7 +3367,16 @@ void registerNvOemPlatformFunctions()
                                ipmi::nvidia::misc::cmdCreateBootStrapAccount,
                                ipmi::Privilege::Admin,
                                ipmi::ipmiCreateBootStrapAccountBF);
-
+#ifdef BF3_OEM_COMMANDS
+    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
+                               ipmi::nvidia::misc::cmdCreateDpuOsAccount,
+                               ipmi::Privilege::Admin,
+                               ipmi::ipmiCreateDpuOsAccountBF);
+    ipmi::registerGroupHandler(ipmi::prioOpenBmcBase, ipmi::nvidia::netGroupExt,
+                               ipmi::nvidia::misc::cmdCGetDpuOsAccount,
+                               ipmi::Privilege::sysIface,
+                               ipmi::ipmiGetDpuOsAccountBF);
+#endif
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdNicGetStrap,
                           ipmi::Privilege::Admin, ipmi::ipmicmdNicGetStrap);

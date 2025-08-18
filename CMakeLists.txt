@@ -199,6 +199,10 @@ if(BF3-OEM-COMMANDS)
     add_definitions (-DBF3_OEM_COMMANDS)
 endif()
 
+if(BF2-OEM-COMMANDS)
+    add_definitions (-DBF2_OEM_COMMANDS)
+endif()
+
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (znvipmioemcmds PROPERTIES SOVERSION "0")
 target_link_libraries (znvipmioemcmds stdc++fs)

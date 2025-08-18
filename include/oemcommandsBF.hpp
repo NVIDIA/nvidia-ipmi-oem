@@ -85,6 +85,8 @@ namespace misc
 {
 constexpr auto cmdGetBootStrapAccount = 0x02;
 constexpr auto cmdCreateBootStrapAccount = 0xF2;
+constexpr auto cmdCGetDpuOsAccount = 0xF3;
+constexpr auto cmdCreateDpuOsAccount = 0xF4;
 } // namespace misc
 
 namespace chassis

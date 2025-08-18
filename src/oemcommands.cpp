@@ -3284,7 +3284,7 @@ static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
                               biosConfigMgrIface, "CredentialBootstrap",
                               bool(true));
         phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "setCredentialBootStrap: Disable CredentialBootstrapping"
             "property set to true");
     }
     else
@@ -3293,7 +3293,7 @@ static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
                               biosConfigMgrIface, "CredentialBootstrap",
                               bool(false));
         phosphor::logging::log<phosphor::logging::level::INFO>(
-            "ipmiGetBootStrapAccount: Disable CredentialBootstrapping"
+            "setCredentialBootStrap: Disable CredentialBootstrapping"
             "property set to false");
     }
 }
@@ -3358,7 +3358,7 @@ bool getRandomUserName(std::string& uniqueStr)
     if (!randFp.is_open())
     {
         phosphor::logging::log<level::ERR>(
-            "ipmiGetBootStrapAccount: Failed to open urandom file");
+            "getRandomUserName: Failed to open urandom file");
         return false;
     }
 
@@ -3445,7 +3445,7 @@ bool getRandomPassword(std::string& uniqueStr)
     if (!randFp.is_open())
     {
         phosphor::logging::log<level::ERR>(
-            "ipmiGetBootStrapAccount: Failed to open urandom file");
+            "getRandomPassword: Failed to open urandom file");
         return false;
     }
 
@@ -3551,14 +3551,14 @@ bool isValidUserName(ipmi::Context::ptr ctx, const std::string& userName)
     if (ec)
     {
         phosphor::logging::log<level::ERR>(
-            "ipmiGetBootStrapAccount: Failed to get User Paths");
+            "isValidUserName: Failed to get User Paths");
         return false;
     }
 
     if (subtreePaths.empty())
     {
         phosphor::logging::log<level::ERR>(
-            "ipmiGetBootStrapAccount: empty subtreepaths");
+            "isValidUserName: empty subtreepaths");
         return false;
     }
 
