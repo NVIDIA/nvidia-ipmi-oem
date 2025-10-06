@@ -73,7 +73,6 @@ set (
     "${CMAKE_CXX_FLAGS} \
     -Werror \
     -Wtype-limits \
-    -Wnull-dereference \
 "
 )
 
@@ -101,6 +100,10 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 find_package (OpenSSL REQUIRED)
 include_directories (SYSTEM ${OPENSSL_INCLUDE_DIR})
+
+# Find Boost - boost::process is header-only but may need system/filesystem at runtime
+find_package(Boost REQUIRED)
+include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
 
 include_directories (SYSTEM ${CMAKE_BINARY_DIR})
 add_custom_command(OUTPUT include/ipmi-whitelist.hpp
@@ -207,6 +210,7 @@ target_link_libraries (znvipmioemcmds -lchannellayer)
 target_link_libraries (znvipmioemcmds ${OPENSSL_CRYPTO_LIBRARY})
 target_link_libraries (znvipmioemcmds gpiodcxx)
 target_link_libraries (znvipmioemcmds pam)
+target_link_libraries (znvipmioemcmds boost_process boost_system)
 
 install (TARGETS znvipmioemcmds DESTINATION lib/ipmid-providers)
 

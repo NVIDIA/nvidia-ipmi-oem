@@ -31,7 +31,6 @@
 #include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/process/v1/child.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>

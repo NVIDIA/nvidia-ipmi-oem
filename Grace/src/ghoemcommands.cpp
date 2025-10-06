@@ -31,8 +31,9 @@
 #include <unistd.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/format.hpp>
-#include <boost/process/v1/child.hpp>
+#include <boost/process/v2/process.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
@@ -281,7 +282,9 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
 template <typename... ArgTypes>
 static int executeCmd(const char* path, ArgTypes&&... tArgs)
 {
-    boost::process::v1::child execProg(path, const_cast<char*>(tArgs)...);
+    boost::process::v2::process execProg(
+        *getIoContext(), boost::filesystem::path(path),
+        std::vector<std::string>{std::string(tArgs)...});
     execProg.wait();
     return execProg.exit_code();
 }
@@ -633,7 +636,12 @@ ipmi::RspType<uint8_t> ipmiSetFanControl(uint8_t mode)
         /* manual mode, stop fan service */
         std::string stopFanString = "systemctl stop ";
         stopFanString += nvidia::fanServiceName;
-        system(stopFanString.c_str());
+        int ret = system(stopFanString.c_str());
+        if (ret != 0)
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Failed to stop fan service");
+        }
 
         /* set fans to default speed */
         return ipmiSetAllFanZonesPWMDuty(nvidia::fanNoServiceSpeed);
@@ -1831,10 +1839,20 @@ ipmi::RspType<> ipmiOemSoftReboot()
 {
     /* TODO: Should be handled by dbus call once backend exists */
     /* call powerctrl grace_off to trigger soft off */
-    system("powerctrl grace_off");
+    int ret = system("powerctrl grace_off");
+    if (ret != 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to execute grace_off");
+    }
     /* call powerctrl for power cycle, this will force off if the grace off
      * didn't occur */
-    system("powerctrl power_cycle");
+    ret = system("powerctrl power_cycle");
+    if (ret != 0)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Failed to execute power_cycle");
+    }
     return ipmi::responseSuccess();
 }
 
