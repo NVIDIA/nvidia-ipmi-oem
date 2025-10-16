@@ -31,6 +31,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/container/flat_map.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/process/v2/process.hpp>
 #include <ipmid/api-types.hpp>
 #include <ipmid/api.hpp>
@@ -336,8 +337,9 @@ ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
 template <typename... ArgTypes>
 static int executeCmd(const char* path, ArgTypes&&... tArgs)
 {
-    boost::process::v2::process execProg(getIoContext(), path,
-                                         const_cast<char*>(tArgs)...);
+    boost::process::v2::process execProg(
+        *getIoContext(), boost::filesystem::path(path),
+        std::vector<std::string>{std::string(tArgs)...});
     execProg.wait();
     return execProg.exit_code();
 }
