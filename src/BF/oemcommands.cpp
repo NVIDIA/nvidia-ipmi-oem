@@ -1905,7 +1905,7 @@ ipmi::RspType<> simplePropertySet(ipmi::Context::ptr ctx, const char* service,
 #ifdef BF3_OEM_COMMANDS
 static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBFInternal(ipmi::Context::ptr ctx,
-                                      uint8_t disableCredBootStrap)
+                                      userInfo& accountInfo)
 {
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "ipmiGetBootStrapAccountBFInternal start");
@@ -1914,8 +1914,41 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     {
         return ipmi::responseResponseError();
     }
-    auto ret = ipmi::responseSuccess(uefiAccount.respUserNameBuf,
-                                     uefiAccount.respPasswordBuf);
+
+    // Password is saved in RAM. If BMC is resetting,
+    // the password is lost and cannot be send to UEFI.
+    if (accountInfo.respPasswordBuf.empty())
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiGetBootStrapAccountBFInternal: Password is not saved in RAM.");
+        return ipmi::responseResponseError();
+    }
+
+    auto accountObjects =
+        ipmi::getManagedObjects(*ctx->bus, "xyz.openbmc_project.User.Manager",
+                                "/xyz/openbmc_project/user");
+    bool foundAccount = false;
+    // Verify the account exists in the D-Bus
+    for (const auto& [path, interfaces] : accountObjects)
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            ("Found object: " + std::string(path)).c_str());
+        std::string accountName =
+            std::filesystem::path(std::string(path)).filename().string();
+        if (accountName == accountInfo.name)
+        {
+            foundAccount = true;
+            break;
+        }
+    }
+    if (!foundAccount)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "ipmiGetBootStrapAccountBFInternal: UEFI account not found");
+        return ipmi::responseResponseError();
+    }
+    auto ret = ipmi::responseSuccess(accountInfo.respUserNameBuf,
+                                     accountInfo.respPasswordBuf);
     return ret;
 }
 
@@ -1924,14 +1957,7 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
 {
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "ipmiGetDpuOsAccountBF start");
-    if (!isUefiState(ctx))
-    {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "ipmiGetDpuOsAccountBF: not in UEFI state");
-        return ipmi::responseResponseError();
-    }
-    return ipmi::responseSuccess(dpuOsAccount.respUserNameBuf,
-                                 dpuOsAccount.respPasswordBuf);
+    return ipmiGetBootStrapAccountBFInternal(ctx, dpuOsAccount);
 }
 
 #elif BF2_OEM_COMMANDS
@@ -2028,7 +2054,9 @@ static ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
     ipmiGetBootStrapAccountBF(ipmi::Context::ptr ctx,
                               uint8_t disableCredBootStrap)
 {
-#if defined(BF3_OEM_COMMANDS) || defined(BF2_OEM_COMMANDS)
+#if defined(BF3_OEM_COMMANDS)
+    return ipmiGetBootStrapAccountBFInternal(ctx, uefiAccount);
+#elif defined(BF2_OEM_COMMANDS)
     return ipmiGetBootStrapAccountBFInternal(ctx, disableCredBootStrap);
 #else
     return ipmi::responseResponseError();
