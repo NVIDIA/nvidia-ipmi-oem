@@ -68,6 +68,10 @@ option (gb200nvl-oem-commands
 	"To support commands relevant only to GB200NVL"
         OFF)
 
+option (nvidia-ipmi-metrics
+        "Enable IPMI command metrics logging"
+        OFF)
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -152,6 +156,13 @@ else()
 
 endif()
 
+# IPMI metrics library
+if(nvidia-ipmi-metrics)
+    SET(metrics_library_sources
+        src/nvidia-metrics-logging.cpp
+    )
+endif()
+
 if(disable-smbpbi-passthru)
     add_definitions (-DENABLE_SMBPBI_PASSTHRU=0)
 else()
@@ -217,6 +228,19 @@ target_link_libraries (znvipmioemcmds pam)
 target_link_libraries (znvipmioemcmds boost_process boost_system)
 
 install (TARGETS znvipmioemcmds DESTINATION lib/ipmid-providers)
+
+# Create a separate library for IPMI metrics
+if(nvidia-ipmi-metrics)
+    add_library ( znvipmi-metrics SHARED ${metrics_library_sources})
+    set_target_properties (znvipmi-metrics PROPERTIES VERSION "0.1.0")
+    set_target_properties (znvipmi-metrics PROPERTIES SOVERSION "0")
+    target_link_libraries (znvipmi-metrics stdc++fs)
+    target_link_libraries (znvipmi-metrics ipmid)
+    target_link_libraries (znvipmi-metrics sdbusplus)
+    target_link_libraries (znvipmi-metrics phosphor_logging)
+    target_link_libraries (znvipmioemcmds -lchannellayer)
+    install (TARGETS znvipmi-metrics DESTINATION lib/ipmid-providers)
+endif()
 
 target_compile_definitions (
     znvipmioemcmds PRIVATE
