@@ -1176,29 +1176,28 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
 
         get_sdr::SensorDataFullRecord record = {0};
 
-        get_sdr::header::set_record_id(
-            recordID,
-            reinterpret_cast<get_sdr::SensorDataRecordHeader*>(&record));
-        record.header.sdr_version = ipmiSdrVersion;
-        record.header.record_type = get_sdr::SENSOR_DATA_FULL_RECORD;
-        record.header.record_length = sizeof(get_sdr::SensorDataFullRecord) -
-                                      sizeof(get_sdr::SensorDataRecordHeader);
-        record.key.owner_id = 0x20;
-        record.key.owner_lun = lun;
-        record.key.sensor_number = sensornumber;
+        reinterpret_cast<get_sdr::SensorDataRecordHeader*>(&record)->recordId =
+            recordID;
+        record.header.sdrVersion = ipmiSdrVersion;
+        record.header.recordType = get_sdr::SENSOR_DATA_FULL_RECORD;
+        record.header.recordLength = sizeof(get_sdr::SensorDataFullRecord) -
+                                     sizeof(get_sdr::SensorDataRecordHeader);
+        record.key.ownerId = 0x20;
+        record.key.ownerLun = lun;
+        record.key.sensorNumber = sensornumber;
 
-        record.body.sensor_capabilities = 0x68; // auto rearm - todo hysteresis
-        record.body.sensor_type = getSensorTypeFromPath(path);
+        record.body.sensorCapabilities = 0x68; // auto rearm - todo hysteresis
+        record.body.sensorType = getSensorTypeFromPath(path);
         std::string type = getSensorTypeStringFromPath(path);
         auto typeCstr = type.c_str();
         auto findUnits = sensorUnits.find(typeCstr);
         if (findUnits != sensorUnits.end())
         {
-            record.body.sensor_units_2_base =
+            record.body.sensorUnits2Base =
                 static_cast<uint8_t>(findUnits->second);
         } // else default 0x0 unspecified
 
-        record.body.event_reading_type = getSensorEventTypeFromPath(path);
+        record.body.eventReadingType = getSensorEventTypeFromPath(path);
 
         auto sensorObject = sensorMap.find("xyz.openbmc_project.Sensor.Value");
         if (sensorObject == sensorMap.end())
@@ -1213,8 +1212,8 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         // entityInstance
         updateIpmiFromAssociation(path, sensorMap, entityId, entityInstance);
 
-        record.body.entity_id = entityId;
-        record.body.entity_instance = entityInstance;
+        record.body.entityId = entityId;
+        record.body.entityInstance = entityInstance;
 
         double max = 0;
         double min = 0;
@@ -1246,23 +1245,23 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         // Byte 30 = RRRRBBBB = rExp (signed), bExp (signed)
 
         // apply M, B, and exponents, M and B are 10 bit values, exponents are 4
-        record.body.m_lsb = mValue & 0xFF;
+        record.body.mLsb = mValue & 0xFF;
 
         uint8_t mBitSign = (mValue < 0) ? 1 : 0;
         uint8_t mBitNine = (mValue & 0x0100) >> 8;
 
         // move the smallest bit of the MSB into place (bit 9)
         // the MSbs are bits 7:8 in m_msb_and_tolerance
-        record.body.m_msb_and_tolerance = (mBitSign << 7) | (mBitNine << 6);
+        record.body.mMsbAndTolerance = (mBitSign << 7) | (mBitNine << 6);
 
-        record.body.b_lsb = bValue & 0xFF;
+        record.body.bLsb = bValue & 0xFF;
 
         uint8_t bBitSign = (bValue < 0) ? 1 : 0;
         uint8_t bBitNine = (bValue & 0x0100) >> 8;
 
         // move the smallest bit of the MSB into place (bit 9)
         // the MSbs are bits 7:8 in b_msb_and_accuracy_lsb
-        record.body.b_msb_and_accuracy_lsb = (bBitSign << 7) | (bBitNine << 6);
+        record.body.bMsbAndAccuracyLsb = (bBitSign << 7) | (bBitNine << 6);
 
         uint8_t rExpSign = (rExp < 0) ? 1 : 0;
         uint8_t rExpBits = rExp & 0x07;
@@ -1271,11 +1270,11 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         uint8_t bExpBits = bExp & 0x07;
 
         // move rExp and bExp into place
-        record.body.r_b_exponents = (rExpSign << 7) | (rExpBits << 4) |
+        record.body.rbExponents = (rExpSign << 7) | (rExpBits << 4) |
                                     (bExpSign << 3) | bExpBits;
 
         // Set the analog reading byte interpretation accordingly
-        record.body.sensor_units_1 = (bSigned ? 1 : 0) << 7;
+        record.body.sensorUnits1 = (bSigned ? 1 : 0) << 7;
 
         // TODO(): Perhaps care about Tolerance, Accuracy, and so on
         // These seem redundant, but derivable from the above 5 attributes
@@ -1302,9 +1301,9 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
 
             name.resize(FULL_RECORD_ID_STR_MAX_LENGTH);
         }
-        record.body.id_string_info = name.size();
-        std::strncpy(record.body.id_string, name.c_str(),
-                     sizeof(record.body.id_string));
+        record.body.idStringInfo = name.size();
+        std::strncpy(record.body.idString, name.c_str(),
+                     sizeof(record.body.idString));
 
         IPMIThresholds thresholdData;
         try
@@ -1318,57 +1317,57 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
 
         if (thresholdData.criticalHigh)
         {
-            record.body.upper_critical_threshold = *thresholdData.criticalHigh;
-            record.body.supported_deassertions[1] |= static_cast<uint8_t>(
+            record.body.upperCriticalThreshold = *thresholdData.criticalHigh;
+            record.body.supportedDeassertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::criticalThreshold);
-            record.body.supported_deassertions[1] |= static_cast<uint8_t>(
+            record.body.supportedDeassertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::upperCriticalGoingHigh);
-            record.body.supported_assertions[1] |= static_cast<uint8_t>(
+            record.body.supportedAssertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::upperCriticalGoingHigh);
-            record.body.discrete_reading_setting_mask[0] |=
+            record.body.discreteReadingSettingMask[0] |=
                 static_cast<uint8_t>(IPMISensorReadingByte3::upperCritical);
         }
         if (thresholdData.warningHigh)
         {
-            record.body.upper_noncritical_threshold =
+            record.body.upperNoncriticalThreshold =
                 *thresholdData.warningHigh;
-            record.body.supported_deassertions[1] |= static_cast<uint8_t>(
+            record.body.supportedDeassertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::nonCriticalThreshold);
-            record.body.supported_deassertions[0] |= static_cast<uint8_t>(
+            record.body.supportedDeassertions[0] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::upperNonCriticalGoingHigh);
-            record.body.supported_assertions[0] |= static_cast<uint8_t>(
+            record.body.supportedAssertions[0] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::upperNonCriticalGoingHigh);
-            record.body.discrete_reading_setting_mask[0] |=
+            record.body.discreteReadingSettingMask[0] |=
                 static_cast<uint8_t>(IPMISensorReadingByte3::upperNonCritical);
         }
         if (thresholdData.criticalLow)
         {
-            record.body.lower_critical_threshold = *thresholdData.criticalLow;
-            record.body.supported_assertions[1] |= static_cast<uint8_t>(
+            record.body.lowerCriticalThreshold = *thresholdData.criticalLow;
+            record.body.supportedAssertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::criticalThreshold);
-            record.body.supported_deassertions[0] |= static_cast<uint8_t>(
+            record.body.supportedDeassertions[0] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::lowerCriticalGoingLow);
-            record.body.supported_assertions[0] |= static_cast<uint8_t>(
+            record.body.supportedAssertions[0] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::lowerCriticalGoingLow);
-            record.body.discrete_reading_setting_mask[0] |=
+            record.body.discreteReadingSettingMask[0] |=
                 static_cast<uint8_t>(IPMISensorReadingByte3::lowerCritical);
         }
         if (thresholdData.warningLow)
         {
-            record.body.lower_noncritical_threshold = *thresholdData.warningLow;
-            record.body.supported_assertions[1] |= static_cast<uint8_t>(
+            record.body.lowerNoncriticalThreshold = *thresholdData.warningLow;
+            record.body.supportedAssertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::nonCriticalThreshold);
-            record.body.supported_deassertions[0] |= static_cast<uint8_t>(
+            record.body.supportedDeassertions[0] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::lowerNonCriticalGoingLow);
-            record.body.supported_assertions[0] |= static_cast<uint8_t>(
+            record.body.supportedAssertions[0] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::lowerNonCriticalGoingLow);
-            record.body.discrete_reading_setting_mask[0] |=
+            record.body.discreteReadingSettingMask[0] |=
                 static_cast<uint8_t>(IPMISensorReadingByte3::lowerNonCritical);
         }
 
         // everything that is readable is setable
-        record.body.discrete_reading_setting_mask[1] =
-            record.body.discrete_reading_setting_mask[0];
+        record.body.discreteReadingSettingMask[1] =
+            record.body.discreteReadingSettingMask[0];
 
         // insert the record into the map
         std::vector<uint8_t> sdr;
@@ -1419,9 +1418,8 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
             {
                 return GENERAL_ERROR;
             }
-            get_sdr::header::set_record_id(
-                recordID,
-                reinterpret_cast<get_sdr::SensorDataRecordHeader*>(&data));
+            reinterpret_cast<get_sdr::SensorDataRecordHeader*>(&data)->recordId =
+                recordID;
 
             std::vector<uint8_t> record;
             record.insert(record.end(), (uint8_t*)&data,
@@ -1472,12 +1470,12 @@ static ipmi::RspType<uint8_t, // respcount
             get_sdr::SensorDataRecordHeader* hdr =
                 reinterpret_cast<get_sdr::SensorDataRecordHeader*>(
                     sdr.second.data());
-            if (hdr->record_type == get_sdr::SENSOR_DATA_FULL_RECORD)
+            if (hdr->recordType == get_sdr::SENSOR_DATA_FULL_RECORD)
             {
                 get_sdr::SensorDataFullRecord* record =
                     reinterpret_cast<get_sdr::SensorDataFullRecord*>(
                         sdr.second.data());
-                if (ctx->lun == record->key.owner_lun)
+                if (ctx->lun == record->key.ownerLun)
                 {
                     sdrCount++;
                 }
@@ -1679,7 +1677,7 @@ ipmi::RspType<uint16_t,            // next record ID
     }
 
     size_t sdrLength = sizeof(get_sdr::SensorDataRecordHeader) +
-                       hdr->record_length;
+                       hdr->recordLength;
     if (sdrLength < (offset + bytesToRead))
     {
         bytesToRead = sdrLength - offset;

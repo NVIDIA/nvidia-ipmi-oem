@@ -839,11 +839,10 @@ ipmi_ret_t getFruSdrs(ipmi::Context::ptr ctx, size_t index,
     }
     size_t sizeDiff = maxFruSdrNameSize - name.size();
 
-    resp.header.record_id_lsb = 0x0; // calling code is to implement these
-    resp.header.record_id_msb = 0x0;
-    resp.header.sdr_version = ipmiSdrVersion;
-    resp.header.record_type = get_sdr::SENSOR_DATA_FRU_RECORD;
-    resp.header.record_length = sizeof(resp.body) + sizeof(resp.key) - sizeDiff;
+    resp.header.recordId = 0x0; // calling code is to implement these
+    resp.header.sdrVersion = ipmiSdrVersion;
+    resp.header.recordType = get_sdr::SENSOR_DATA_FRU_RECORD;
+    resp.header.recordLength = sizeof(resp.body) + sizeof(resp.key) - sizeDiff;
     resp.key.deviceAddress = 0x20;
     resp.key.fruID = device->first;
     resp.key.accessLun = 0x80; // logical / physical fru device
@@ -890,11 +889,10 @@ std::vector<uint8_t> getType12SDRs(uint16_t index, uint16_t recordId)
     if (index == 0)
     {
         Type12Record bmc = {};
-        bmc.header.record_id_lsb = recordId;
-        bmc.header.record_id_msb = recordId >> 8;
-        bmc.header.sdr_version = ipmiSdrVersion;
-        bmc.header.record_type = 0x12;
-        bmc.header.record_length = 0x1b;
+        bmc.header.recordId = recordId;
+        bmc.header.sdrVersion = ipmiSdrVersion;
+        bmc.header.recordType = 0x12;
+        bmc.header.recordLength = 0x1b;
         bmc.slaveAddress = 0x20;
         bmc.channelNumber = 0;
         bmc.powerStateNotification = 0;
@@ -912,11 +910,10 @@ std::vector<uint8_t> getType12SDRs(uint16_t index, uint16_t recordId)
     else if (index == 1)
     {
         Type12Record me = {};
-        me.header.record_id_lsb = recordId;
-        me.header.record_id_msb = recordId >> 8;
-        me.header.sdr_version = ipmiSdrVersion;
-        me.header.record_type = 0x12;
-        me.header.record_length = 0x16;
+        me.header.recordId = recordId;
+        me.header.sdrVersion = ipmiSdrVersion;
+        me.header.recordType = 0x12;
+        me.header.recordLength = 0x16;
         me.slaveAddress = 0x2C;
         me.channelNumber = 6;
         me.powerStateNotification = 0x24;
@@ -946,11 +943,10 @@ std::vector<uint8_t> getNMDiscoverySDR(uint16_t index, uint16_t recordId)
     if (index == 0)
     {
         NMDiscoveryRecord nm = {};
-        nm.header.record_id_lsb = recordId;
-        nm.header.record_id_msb = recordId >> 8;
-        nm.header.sdr_version = ipmiSdrVersion;
-        nm.header.record_type = 0xC0;
-        nm.header.record_length = 0xB;
+        nm.header.recordId = recordId;
+        nm.header.sdrVersion = ipmiSdrVersion;
+        nm.header.recordType = 0xC0;
+        nm.header.recordLength = 0xB;
         nm.oemID0 = 0x57;
         nm.oemID1 = 0x1;
         nm.oemID2 = 0x0;
