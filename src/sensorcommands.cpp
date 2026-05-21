@@ -1271,7 +1271,7 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
 
         // move rExp and bExp into place
         record.body.rbExponents = (rExpSign << 7) | (rExpBits << 4) |
-                                    (bExpSign << 3) | bExpBits;
+                                  (bExpSign << 3) | bExpBits;
 
         // Set the analog reading byte interpretation accordingly
         record.body.sensorUnits1 = (bSigned ? 1 : 0) << 7;
@@ -1329,8 +1329,7 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
         }
         if (thresholdData.warningHigh)
         {
-            record.body.upperNoncriticalThreshold =
-                *thresholdData.warningHigh;
+            record.body.upperNoncriticalThreshold = *thresholdData.warningHigh;
             record.body.supportedDeassertions[1] |= static_cast<uint8_t>(
                 IPMISensorEventEnableThresholds::nonCriticalThreshold);
             record.body.supportedDeassertions[0] |= static_cast<uint8_t>(
@@ -1418,8 +1417,8 @@ static int getSensorDataRecords(ipmi::Context::ptr ctx)
             {
                 return GENERAL_ERROR;
             }
-            reinterpret_cast<get_sdr::SensorDataRecordHeader*>(&data)->recordId =
-                recordID;
+            reinterpret_cast<get_sdr::SensorDataRecordHeader*>(&data)
+                ->recordId = recordID;
 
             std::vector<uint8_t> record;
             record.insert(record.end(), (uint8_t*)&data,
