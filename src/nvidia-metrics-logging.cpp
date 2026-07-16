@@ -227,6 +227,18 @@ class NvidiaMetricsLogging
     }
 
     /**
+     * @brief Check whether an IPMI command's request data contains a secret
+     * @param netFn - IPMI Network Function of the command
+     * @param cmd   - IPMI command code
+     * @return true if the request data must be redacted from the log
+     */
+    static bool isSecretBearingCommand(uint8_t netFn, uint8_t cmd)
+    {
+        return netFn == ipmi::netFnApp &&
+               cmd == ipmi::app::cmdSetUserPasswordCommand;
+    }
+
+    /**
      * @brief Log IPMI request for metrics collection
      * @param request - IPMI request object containing command details
      * @return Always returns ccSuccess (never blocks requests)
@@ -241,7 +253,10 @@ class NvidiaMetricsLogging
             }
 
             std::string medium = getMediumTypeStr(request->ctx->channel);
-            std::string reqDataStr = request->payload.raw.empty()
+            bool isSecret = isSecretBearingCommand(request->ctx->netFn,
+                                                   request->ctx->cmd);
+            std::string reqDataStr = isSecret ? "redacted"
+                                     : request->payload.raw.empty()
                                          ? "empty"
                                          : toHexString(request->payload.raw);
 
