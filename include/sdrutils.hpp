@@ -87,14 +87,14 @@ inline static bool getSensorSubtree(std::shared_ptr<SensorSubTree>& subtree)
         sd_bus_unref(bus);
         return false;
     }
-    sdbusplus::bus::bus dbus(bus);
-    static sdbusplus::bus::match::match sensorAdded(
+    sdbusplus::bus_t dbus(bus);
+    static sdbusplus::bus::match_t sensorAdded(
         dbus,
         "type='signal',member='InterfacesAdded',arg0path='/xyz/openbmc_project/"
         "sensors/'",
         [](sdbusplus::message::message& m) { sensorTreePtr.reset(); });
 
-    static sdbusplus::bus::match::match sensorRemoved(
+    static sdbusplus::bus::match_t sensorRemoved(
         dbus,
         "type='signal',member='InterfacesRemoved',arg0path='/xyz/"
         "openbmc_project/sensors/'",

@@ -71,8 +71,8 @@ constexpr static const size_t maxFruSdrNameSize = 16;
 using ObjectType = boost::container::flat_map<
     std::string, boost::container::flat_map<std::string, DbusVariant>>;
 using ManagedObjectType =
-    boost::container::flat_map<sdbusplus::message::object_path, ObjectType>;
-using ManagedEntry = std::pair<sdbusplus::message::object_path, ObjectType>;
+    boost::container::flat_map<sdbusplus::object_path, ObjectType>;
+using ManagedEntry = std::pair<sdbusplus::object_path, ObjectType>;
 
 constexpr static const char* fruDeviceServiceName =
     "xyz.openbmc_project.FruDevice";
@@ -101,7 +101,7 @@ static uint16_t writeBus = 0xFFFF;
 static uint8_t writeAddr = 0XFF;
 
 std::unique_ptr<sdbusplus::Timer> writeTimer = nullptr;
-static std::vector<sdbusplus::bus::match::match> fruMatches;
+static std::vector<sdbusplus::bus::match_t> fruMatches;
 
 ManagedObjectType frus;
 
@@ -371,7 +371,7 @@ void startMatch(void)
                             "type='signal',arg0path='/xyz/openbmc_project/"
                             "FruDevice/',member='InterfacesAdded'",
                             [](sdbusplus::message::message& message) {
-        sdbusplus::message::object_path path;
+        sdbusplus::object_path path;
         ObjectType object;
         try
         {
@@ -402,7 +402,7 @@ void startMatch(void)
                             "type='signal',arg0path='/xyz/openbmc_project/"
                             "FruDevice/',member='InterfacesRemoved'",
                             [](sdbusplus::message::message& message) {
-        sdbusplus::message::object_path path;
+        sdbusplus::object_path path;
         std::set<std::string> interfaces;
         try
         {
