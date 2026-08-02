@@ -74,8 +74,6 @@ constexpr auto cmdPowerPowerCapSet = 0xC9;
 constexpr auto cmdPowerCapMinGet = 0xCA;
 constexpr auto cmdPowerCapMinSet = 0xCB;
 constexpr auto CmdERoTReset = 0xD2;
-constexpr auto CmdGetRsyslogStatus = 0xD3;
-constexpr auto CmdSetRsyslogStatus = 0xD4;
 constexpr auto cmdGuestTunnel = 0xFD;
 constexpr auto cmdBIOSMode = 0x24;
 
