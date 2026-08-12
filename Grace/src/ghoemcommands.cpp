@@ -134,6 +134,18 @@ std::string defaultCertPath = "/etc/ssl/certs/https/server.pem";
 static constexpr const char* persistentDataFilePath =
     "/home/root/bmcweb_persistent_data.json";
 
+// CPU boot state published by the x86 power control implementation
+static constexpr const char* hostStateService =
+    "xyz.openbmc_project.State.Host";
+static constexpr const char* hostStatePath = "/xyz/openbmc_project/state/host0";
+static constexpr const char* cpuBootStateIntf =
+    "xyz.openbmc_project.State.Gpio";
+static constexpr const char* cpuBootDoneProp = "CpuBootDone";
+
+// CPU boot state indication of the legacy power control implementation
+static constexpr const char* cpuBootDoneFilePath =
+    "/run/bmc-state/CPU_BOOT_DONE-I";
+
 void registerNvOemFunctions() __attribute__((constructor));
 
 using namespace phosphor::logging;
@@ -1241,11 +1253,97 @@ ipmi::RspType<uint8_t, uint8_t> ipmiGetRedfishServicePort()
     return ipmi::responseSuccess(msb, lsb);
 }
 
+// The new power control sets the dbus property; the old one creates the file.
+// The CPU boot is done if either one says so.
+static bool isCpuBootDone(ipmi::Context::ptr ctx)
+{
+    int32_t cpuBootDone = 0;
+    boost::system::error_code ec =
+        ipmi::getDbusProperty(ctx, hostStateService, hostStatePath,
+                              cpuBootStateIntf, cpuBootDoneProp, cpuBootDone);
+    if (ec)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "BIOS Password: CpuBootDone property is not available",
+            phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
+    }
+    else if (cpuBootDone == 1)
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "BIOS Password: CpuBootDone property is 1");
+        return true;
+    }
+
+    std::error_code fileEc;
+    if (std::filesystem::exists(cpuBootDoneFilePath, fileEc))
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "BIOS Password: File exists");
+        return true;
+    }
+
+    if (fileEc)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "BIOS Password: Failed to check CPU boot done file",
+            phosphor::logging::entry("ERROR=%s", fileEc.message().c_str()));
+    }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::INFO>(
+            "BIOS Password: File does not exist");
+    }
+
+    return false;
+}
+
+// BIOS Password commands are only served to the BIOS over the host in-band
+// interface, and only before the CPU finishes booting
+ipmi::Cc verifyBiosPasswordAccess(ipmi::Context::ptr ctx)
+{
+    ipmi::ChannelInfo chInfo;
+
+    try
+    {
+        getChannelInfo(ctx->channel, chInfo);
+    }
+    catch (sdbusplus::exception_t& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "BIOS Password: Failed to get Channel Info",
+            phosphor::logging::entry("EXCEPTION=%s", e.what()));
+        return ipmi::ccUnspecifiedError;
+    }
+
+    if ((chInfo.mediumType !=
+         static_cast<uint8_t>(ipmi::EChannelMediumType::systemInterface)))
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "BIOS Password: Error - supported only on system interface");
+        return ipmi::ccCommandNotAvailable;
+    }
+
+    if (isCpuBootDone(ctx))
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "BIOS Password: Error - CPU boot is done");
+        return ipmi::ccCommandNotAvailable;
+    }
+
+    return ipmi::ccSuccess;
+}
+
 ipmi::RspType<std::vector<uint8_t>> ipmiSetBiosPassword(
-    uint8_t id, uint8_t type,
+    ipmi::Context::ptr ctx, uint8_t id, uint8_t type,
     std::array<uint8_t, ipmi::nvidia::misc::biosPasswordSaltSize> salt,
     std::array<uint8_t, ipmi::nvidia::misc::biosPasswordMaxHashSize> hash)
 {
+    auto ret = verifyBiosPasswordAccess(ctx);
+    if (ret != ipmi::ccSuccess)
+    {
+        return ipmi::response(ret);
+    }
+
     using namespace ipmi::nvidia::misc;
     nlohmann::json json;
 
@@ -1304,8 +1402,14 @@ ipmi::RspType<std::vector<uint8_t>> ipmiSetBiosPassword(
 ipmi::RspType<uint8_t,
               std::array<uint8_t, ipmi::nvidia::misc::biosPasswordSaltSize>,
               std::array<uint8_t, ipmi::nvidia::misc::biosPasswordMaxHashSize>>
-    ipmiGetBiosPassword(uint8_t id)
+    ipmiGetBiosPassword(ipmi::Context::ptr ctx, uint8_t id)
 {
+    auto ret = verifyBiosPasswordAccess(ctx);
+    if (ret != ipmi::ccSuccess)
+    {
+        return ipmi::response(ret);
+    }
+
     using namespace ipmi::nvidia::misc;
     uint8_t action = biosPasswordTypeNoChange;
     std::array<uint8_t, biosPasswordSaltSize> salt = {0};
