@@ -164,6 +164,7 @@ endif()
 if(nvidia-ipmi-metrics)
     SET(metrics_library_sources
         src/nvidia-metrics-logging.cpp
+        src/nvidia-ipmi-metrics.cpp
     )
 endif()
 

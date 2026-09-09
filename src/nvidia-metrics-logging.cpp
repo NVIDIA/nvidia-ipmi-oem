@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025 NVIDIA CORPORATION &
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION &
  * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,13 +17,14 @@
 
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
+#include <nvidia-ipmi-metrics.hpp>
 #include <phosphor-logging/lg2.hpp>
 #include <sdbusplus/asio/property.hpp>
 
-#include <iomanip>
 #include <map>
 #include <memory>
-#include <sstream>
+#include <span>
+#include <string_view>
 
 namespace ipmi
 {
@@ -38,24 +39,6 @@ static constexpr const char* metricsObjpath =
     "/xyz/openbmc_project/logging/bmc_cmd_metrics";
 static constexpr const char* metricsIntf = "xyz.openbmc_project.Object.Enable";
 static constexpr const char* metricsProperty = "Enabled";
-
-template <typename T>
-std::string toHexString(const T& data)
-{
-    std::stringstream stream;
-    stream << std::hex << std::uppercase << std::setfill('0');
-
-    auto it = data.begin();
-    if (it != data.end())
-    {
-        stream << std::setw(2) << static_cast<int>(*it);
-        for (++it; it != data.end(); ++it)
-        {
-            stream << ' ' << std::setw(2) << static_cast<int>(*it);
-        }
-    }
-    return stream.str();
-}
 
 inline bool& getIpmiMetricsEnabled()
 {
@@ -181,7 +164,7 @@ class NvidiaMetricsLogging
     /**
      * @brief Get channel medium type string from channel number
      */
-    std::string getMediumTypeStr(uint8_t channel)
+    std::string_view getMediumTypeStr(uint8_t channel)
     {
         ChannelInfo chInfo;
         if (getChannelInfo(channel, chInfo) != ccSuccess)
@@ -252,20 +235,19 @@ class NvidiaMetricsLogging
                 return ipmi::ccSuccess;
             }
 
-            std::string medium = getMediumTypeStr(request->ctx->channel);
-            bool isSecret = isSecretBearingCommand(request->ctx->netFn,
-                                                   request->ctx->cmd);
-            std::string reqDataStr = isSecret ? "redacted"
-                                     : request->payload.raw.empty()
-                                         ? "empty"
-                                         : toHexString(request->payload.raw);
-
-            lg2::info(
-                "IPMI Metrics: Medium={MEDIUM} NetFn={NETFN} LUN={LUN} Cmd={CMD} "
-                "Chan={CHAN} ReqData=[{DATA}]",
-                "MEDIUM", medium, "NETFN", lg2::hex, request->ctx->netFn, "LUN",
-                lg2::hex, request->ctx->lun, "CMD", lg2::hex, request->ctx->cmd,
-                "CHAN", request->ctx->channel, "DATA", reqDataStr);
+            const std::string_view medium =
+                getMediumTypeStr(request->ctx->channel);
+            const bool isSecret = isSecretBearingCommand(request->ctx->netFn,
+                                                         request->ctx->cmd);
+            const std::span<const uint8_t> requestData =
+                isSecret ? std::span<const uint8_t>{}
+                         : std::span<const uint8_t>(request->payload.raw);
+            const auto requestDataMode =
+                isSecret ? metrics::RequestDataMode::redact
+                         : metrics::RequestDataMode::include;
+            metrics::submit(medium, request->ctx->netFn, request->ctx->lun,
+                            request->ctx->cmd, request->ctx->channel,
+                            requestData, requestDataMode);
         }
         catch (const std::exception& e)
         {
