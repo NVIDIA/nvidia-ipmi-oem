@@ -28,6 +28,10 @@ option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
 
+option (BF4X-OEM-COMMANDS
+        "BlueField-4.1 OEM commands"
+        OFF)
+
 option (disable-smbpbi-passthru
         "To disable SMBPBI passthru commands"
         OFF)
@@ -196,6 +200,10 @@ if(gb200nvl-oem-commands)
 	add_compile_definitions(GB200NVL_OEM_COMMANDS=${gb200nvl-oem-commands})
 endif()
 
+if(BF4X-OEM-COMMANDS)
+    list(APPEND flag_library_sources src/BF/BF4X/oemcommands.cpp)
+endif()
+
 if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)
     add_library ( znvipmioemcmds SHARED ${flag_library_sources})
 else()
@@ -208,6 +216,10 @@ endif()
 
 if(BF3-OEM-COMMANDS)
     add_definitions (-DBF3_OEM_COMMANDS)
+endif()
+
+if(BF4X-OEM-COMMANDS)
+    add_compile_definitions(BF4X_OEM_COMMANDS)
 endif()
 
 if(BF2-OEM-COMMANDS)
