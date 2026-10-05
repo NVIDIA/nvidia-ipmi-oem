@@ -22,9 +22,9 @@
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
 #include <phosphor-logging/log.hpp>
+#include <sdbusplus/exception.hpp>
 
 #include <string>
-#include <variant>
 
 using namespace phosphor::logging;
 
@@ -48,39 +48,46 @@ static constexpr const char* rebootTransition =
  * /xyz/openbmc_project/software/bmc, then RequestedBMCTransition=Reboot.
  * The Reset method sets openbmconce and openbmclog.
  */
-ipmi::RspType<> ipmiSystemFactoryResetBF4X(boost::asio::yield_context yield)
+ipmi::RspType<> ipmiSystemFactoryResetBF4X(ipmi::Context::ptr ctx)
 {
-    auto sdbusp = getSdBus();
+    std::string service;
     boost::system::error_code ec;
 
     try
     {
-        std::string service = ipmi::getService(*sdbusp, factoryResetIntf,
-                                               factoryResetPath);
-        sdbusp->yield_method_call<void>(yield, ec, service, factoryResetPath,
-                                        factoryResetIntf, "Reset");
+        ec = ipmi::getService(ctx, factoryResetIntf, factoryResetPath, service);
         if (ec)
         {
-            log<level::ERR>("FactoryReset.Reset failed");
+            log<level::ERR>("FactoryReset service lookup failed",
+                            entry("ERROR=%s", ec.message().c_str()));
+            return ipmi::responseUnspecifiedError();
+        }
+
+        ec = ipmi::callDbusMethod(ctx, service, factoryResetPath,
+                                  factoryResetIntf, "Reset");
+        if (ec)
+        {
+            log<level::ERR>("FactoryReset.Reset failed",
+                            entry("ERROR=%s", ec.message().c_str()));
             return ipmi::responseUnspecifiedError();
         }
 
         log<level::INFO>("BMC factory reset scheduled, rebooting now");
 
-        sdbusp->yield_method_call<void>(
-            yield, ec, bmcStateService, bmcStatePath,
-            "org.freedesktop.DBus.Properties", "Set", bmcStateIntf,
-            "RequestedBMCTransition",
-            std::variant<std::string>{rebootTransition});
+        ec = ipmi::setDbusProperty(ctx, bmcStateService, bmcStatePath,
+                                   bmcStateIntf, "RequestedBMCTransition",
+                                   std::string{rebootTransition});
         if (ec)
         {
-            log<level::ERR>("Failed to trigger BMC reboot via D-Bus");
+            log<level::ERR>("Failed to trigger BMC reboot via D-Bus",
+                            entry("ERROR=%s", ec.message().c_str()));
             return ipmi::responseUnspecifiedError();
         }
     }
-    catch (...)
+    catch (const sdbusplus::exception::exception& e)
     {
-        log<level::ERR>("BMC factory reset exception");
+        log<level::ERR>("BMC factory reset exception",
+                        entry("EXCEPTION=%s", e.what()));
         return ipmi::responseUnspecifiedError();
     }
 
