@@ -48,7 +48,7 @@ static constexpr const char* rebootTransition =
  * /xyz/openbmc_project/software/bmc, then RequestedBMCTransition=Reboot.
  * The Reset method sets openbmconce and openbmclog.
  */
-ipmi::RspType<> ipmiSystemFactoryResetBF4X(ipmi::Context::ptr ctx)
+ipmi::RspType<> ipmiSystemFactoryResetBF41(ipmi::Context::ptr ctx)
 {
     std::string service;
     boost::system::error_code ec;
@@ -96,14 +96,14 @@ ipmi::RspType<> ipmiSystemFactoryResetBF4X(ipmi::Context::ptr ctx)
 
 } // namespace ipmi
 
-void registerBF4XOemFunctions() __attribute__((constructor(103)));
+void registerBF41OemFunctions() __attribute__((constructor(103)));
 
-void registerBF4XOemFunctions()
+void registerBF41OemFunctions()
 {
-    log<level::NOTICE>("Registering BF4X factory reset IPMI command");
+    log<level::NOTICE>("Registering BF4-1 factory reset IPMI command");
 
     ipmi::registerHandler(ipmi::prioOemBase, ipmi::nvidia::netFnOemGlobal,
                           ipmi::nvidia::app::cmdSystemFactoryReset,
                           ipmi::Privilege::Admin,
-                          ipmi::ipmiSystemFactoryResetBF4X);
+                          ipmi::ipmiSystemFactoryResetBF41);
 }

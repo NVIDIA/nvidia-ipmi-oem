@@ -277,7 +277,7 @@ static std::tuple<int, std::vector<std::string>>
     return std::make_tuple(ret, returnValueEmpty);
 }
 
-#ifndef BF4X_OEM_COMMANDS
+#ifndef BF41_OEM_COMMANDS
 ipmi::RspType<> ipmiSystemFactoryReset(boost::asio::yield_context yield)
 {
     /*
@@ -4036,7 +4036,7 @@ void registerNvOemFunctions()
                           ipmi::nvidia::misc::cmdGetBMCBootComplete,
                           ipmi::Privilege::Admin, ipmi::ipmiGetBMCBootComplete);
 
-#ifndef BF4X_OEM_COMMANDS
+#ifndef BF41_OEM_COMMANDS
     log<level::NOTICE>(
         "Registering ", entry("NetFn:[%02Xh], ", ipmi::nvidia::netFnOemGlobal),
         entry("Cmd:[%02Xh]", ipmi::nvidia::app::cmdSystemFactoryReset));

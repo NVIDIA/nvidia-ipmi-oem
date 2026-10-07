@@ -28,7 +28,7 @@ option (BF3-OEM-COMMANDS
         "To support disable specific ipmi-oem-commands"
         OFF)
 
-option (BF4X-OEM-COMMANDS
+option (BF4-1-OEM-COMMANDS
         "BlueField-4.1 OEM commands"
         OFF)
 
@@ -200,8 +200,8 @@ if(gb200nvl-oem-commands)
 	add_compile_definitions(GB200NVL_OEM_COMMANDS=${gb200nvl-oem-commands})
 endif()
 
-if(BF4X-OEM-COMMANDS)
-    list(APPEND flag_library_sources src/BF/BF4X/oemcommands.cpp)
+if(BF4-1-OEM-COMMANDS)
+    list(APPEND flag_library_sources src/BF/BF4/oemcommands.cpp)
 endif()
 
 if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)
@@ -218,8 +218,8 @@ if(BF3-OEM-COMMANDS)
     add_definitions (-DBF3_OEM_COMMANDS)
 endif()
 
-if(BF4X-OEM-COMMANDS)
-    add_compile_definitions(BF4X_OEM_COMMANDS)
+if(BF4-1-OEM-COMMANDS)
+    add_compile_definitions(BF41_OEM_COMMANDS)
 endif()
 
 if(BF2-OEM-COMMANDS)
