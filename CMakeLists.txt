@@ -76,6 +76,12 @@ option (nvidia-ipmi-metrics
         "Enable IPMI command metrics logging"
         OFF)
 
+option (cpu-diag-watchdog
+        "Build the CPU diag heartbeat watchdog provider for host ipmid"
+        OFF)
+
+option (ENABLE_TEST "Build unit tests" OFF)
+
 set (
     CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} \
@@ -253,6 +259,25 @@ if(nvidia-ipmi-metrics)
     target_link_libraries (znvipmi-metrics phosphor_logging)
     target_link_libraries (znvipmioemcmds -lchannellayer)
     install (TARGETS znvipmi-metrics DESTINATION lib/ipmid-providers)
+endif()
+
+# CPU diag heartbeat watchdog; host ipmid only
+if(cpu-diag-watchdog)
+    add_library ( znvipmi-diagwatchdog SHARED src/cpu-diag-watchdog.cpp)
+    set_target_properties (znvipmi-diagwatchdog PROPERTIES VERSION "0.1.0")
+    set_target_properties (znvipmi-diagwatchdog PROPERTIES SOVERSION "0")
+    target_link_libraries (znvipmi-diagwatchdog ipmid)
+    target_link_libraries (znvipmi-diagwatchdog sdbusplus)
+    target_link_libraries (znvipmi-diagwatchdog phosphor_logging)
+    install (TARGETS znvipmi-diagwatchdog DESTINATION lib/ipmid-providers)
+endif()
+
+if(ENABLE_TEST)
+    find_package (GTest REQUIRED)
+    enable_testing ()
+    add_executable (cpu-diag-check-test test/cpu-diag-check-test.cpp)
+    target_link_libraries (cpu-diag-check-test GTest::gtest_main)
+    add_test (NAME cpu-diag-check-test COMMAND cpu-diag-check-test)
 endif()
 
 target_compile_definitions (

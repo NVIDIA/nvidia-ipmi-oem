@@ -85,11 +85,6 @@ constexpr auto mbLedName = "motherboard_debug_led";
 constexpr auto GWpGpioId = 70;
 constexpr auto GWpGpioChip = "gpiochip816";
 
-#ifdef CPU_DIAG_ENABLE
-constexpr auto diagServiceList = "cpu-diag-status.timer "
-                                 "cpu-diag-status.service";
-#endif
-
 } // namespace nvidia
 } // namespace ipmi
 

@@ -2317,11 +2317,14 @@ ipmi::RspType<uint8_t> ipmiStandbyPowerCycle()
 // setDiag
 ipmi::RspType<uint8_t> setDiag(ipmi::Context::ptr ctx, uint8_t mode)
 {
+    // DiagMode drives the heartbeat watchdog, so reject an invalid mode
+    // before it can enable it.
+    if (mode > 1)
+    {
+        phosphor::logging::log<level::ERR>("Invalid Mode");
+        return ipmi::responseResponseError();
+    }
     std::variant<bool> diagMode = static_cast<bool>(mode);
-    std::string startupDiagTimerString = "systemctl start ";
-    std::string stopDiagTimerString = "systemctl stop ";
-    startupDiagTimerString += nvidia::diagServiceList;
-    stopDiagTimerString += nvidia::diagServiceList;
 
     try
     {
@@ -2400,29 +2403,6 @@ ipmi::RspType<uint8_t> setDiag(ipmi::Context::ptr ctx, uint8_t mode)
                     phosphor::logging::entry("SERVICE=%s", diagService));
                 return ipmi::responseUnspecifiedError();
             }
-
-            auto r = system(stopDiagTimerString.c_str());
-            if (r != 0)
-            {
-                phosphor::logging::log<level::ERR>(
-                    "ipmiDiagFlowCtrl: service failed to stop");
-                return ipmi::responseResponseError();
-            }
-        }
-        else if (mode == 1)
-        {
-            auto r = system(startupDiagTimerString.c_str());
-            if (r != 0)
-            {
-                phosphor::logging::log<level::ERR>(
-                    "ipmiDiagFlowCtrl: service failed to start");
-                return ipmi::responseResponseError();
-            }
-        }
-        else
-        {
-            phosphor::logging::log<level::ERR>("Invalid Mode");
-            return ipmi::responseResponseError();
         }
     }
     catch (const std::exception& e)
