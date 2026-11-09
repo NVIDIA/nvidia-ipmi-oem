@@ -246,12 +246,16 @@ ipmi::RspType<uint8_t> ipmiOemSbmrSendDescription(
     try
     {
         std::map<std::string, std::string> additionData = {};
-        auto method = ctx->bus->new_method_call(loggingService, loggingObject,
-                                                loggingInterface, "Create");
-        method.append(eventMessage);
-        method.append(eventSeverity);
-        method.append(additionData);
-        auto reply = ctx->bus->call(method);
+        ctx->bus->async_method_call(
+            [](const boost::system::error_code& ec) {
+            if (ec)
+            {
+                phosphor::logging::log<phosphor::logging::level::ERR>(
+                    "ipmiOemSbmrSendDescription: Logging Create failed",
+                    phosphor::logging::entry("ERROR=%s", ec.message().c_str()));
+            }
+        }, loggingService, loggingObject, loggingInterface, "Create",
+            eventMessage, eventSeverity, additionData);
     }
     catch (const std::exception& e)
     {
