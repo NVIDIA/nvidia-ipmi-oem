@@ -19,6 +19,7 @@
 
 #include "biosversionutils.hpp"
 #include "dgx-a100-config.hpp"
+#include "localusers.hpp"
 
 #include <fcntl.h>
 #include <linux/i2c-dev.h>
@@ -196,6 +197,10 @@ static constexpr const char* biosConfigMgrPath =
     "/xyz/openbmc_project/bios_config/manager";
 static constexpr const char* biosConfigMgrIface =
     "xyz.openbmc_project.BIOSConfig.Manager";
+static constexpr const char* biosConfigMgrService =
+    "xyz.openbmc_project.BIOSConfigManager";
+static constexpr const char* userMgrService =
+    "xyz.openbmc_project.User.Manager";
 
 // Cert Paths
 std::string defaultCertPath = "/etc/ssl/certs/https/server.pem";
@@ -3257,11 +3262,9 @@ static bool getCredentialBootStrap()
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
     try
     {
-        auto biosService = ipmi::getService(*dbus, biosConfigMgrIface,
-                                            biosConfigMgrPath);
-        auto credentialBootStrap =
-            ipmi::getDbusProperty(*dbus, biosService, biosConfigMgrPath,
-                                  biosConfigMgrIface, "CredentialBootstrap");
+        auto credentialBootStrap = ipmi::getDbusProperty(
+            *dbus, biosConfigMgrService, biosConfigMgrPath, biosConfigMgrIface,
+            "CredentialBootstrap");
 
         return std::get<bool>(credentialBootStrap);
     }
@@ -3276,8 +3279,7 @@ static bool getCredentialBootStrap()
 static void setCredentialBootStrap(const uint8_t& disableCredBootStrap)
 {
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-    auto biosService = ipmi::getService(*dbus, biosConfigMgrIface,
-                                        biosConfigMgrPath);
+    std::string biosService = biosConfigMgrService;
     // if disable crendential BootStrap status is 0xa5,
     // then Keep credential bootstrapping enabled
     if (disableCredBootStrap == 0xa5)
@@ -3543,6 +3545,18 @@ bool isValidUserName(ipmi::Context::ptr ctx, const std::string& userName)
         return false;
     }
 
+    if (auto exists = localUserExists(userName))
+    {
+        if (*exists)
+        {
+            log<level::ERR>(
+                "User name already exists",
+                phosphor::logging::entry("UserName= %s", userName.c_str()));
+            return false;
+        }
+        return true;
+    }
+
     boost::system::error_code ec;
     GetSubTreePathsType subtreePaths =
         ctx->bus->yield_method_call<GetSubTreePathsType>(
@@ -3640,8 +3654,7 @@ ipmi::RspType<std::vector<uint8_t>, std::vector<uint8_t>>
         }
 
         std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
-        std::string service = getService(*dbus, userMgrInterface,
-                                         userMgrObjBasePath);
+        std::string service = userMgrService;
 
         // create the new user with only redfish-hostiface group access
         auto method = dbus->new_method_call(service.c_str(), userMgrObjBasePath,
