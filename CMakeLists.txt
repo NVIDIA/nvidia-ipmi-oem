@@ -95,8 +95,13 @@ project (nvidia-ipmi-oem CXX)
 add_definitions (-DBOOST_ERROR_CODE_HEADER_ONLY)
 add_definitions (-DBOOST_SYSTEM_NO_DEPRECATED)
 add_definitions (-DBOOST_ALL_NO_LIB)
-add_definitions (-DBOOST_NO_RTTI)
-add_definitions (-DBOOST_NO_TYPEID)
+# ipmid is built without these; the BF4 password commands wait on the
+# handler's yield, which only resumes when the layouts match, so BF4 must
+# not define them. Other platforms keep the existing flags.
+if(NOT BF4-OEM-COMMANDS)
+    add_definitions (-DBOOST_NO_RTTI)
+    add_definitions (-DBOOST_NO_TYPEID)
+endif()
 add_definitions (-DBOOST_ASIO_DISABLE_THREADS)
 add_definitions (-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
 add_definitions (-Wno-psabi)
@@ -157,6 +162,12 @@ else()
                 src/oemcommands.cpp src/sbmr-bootprogress.cpp
                 src/BF/oemcommands.cpp src/BF/chassiscommands.cpp
         )
+    elseif(BF4-OEM-COMMANDS)
+    # UEFI/BIOS password commands only.
+    SET(flag_library_sources
+                src/oemcommands.cpp src/sbmr-bootprogress.cpp
+                src/BF/BF4/uefi_password_bf4.cpp
+        )
     else()
     SET(flag_library_sources
             src/oemcommands.cpp src/sbmr-bootprogress.cpp
@@ -211,7 +222,7 @@ if(BF4-1-OEM-COMMANDS)
     list(APPEND flag_library_sources src/BF/BF4/oemcommands.cpp)
 endif()
 
-if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)
+if(BF2-OEM-COMMANDS OR BF3-OEM-COMMANDS OR BF4-OEM-COMMANDS OR SPECTRE-OEM-COMMANDS)
     add_library ( znvipmioemcmds SHARED ${flag_library_sources})
 else()
     add_library ( znvipmioemcmds SHARED ${common_library_sources} ${flag_library_sources})
@@ -231,6 +242,10 @@ endif()
 
 if(BF2-OEM-COMMANDS)
     add_definitions (-DBF2_OEM_COMMANDS)
+endif()
+
+if(BF4-OEM-COMMANDS)
+    add_definitions (-DBF4_OEM_COMMANDS)
 endif()
 
 set_target_properties (znvipmioemcmds PROPERTIES VERSION "0.1.0")

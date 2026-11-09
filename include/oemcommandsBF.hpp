@@ -85,6 +85,8 @@ constexpr auto cmdGetBootStrapAccount = 0x02;
 constexpr auto cmdCreateBootStrapAccount = 0xF2;
 constexpr auto cmdCGetDpuOsAccount = 0xF3;
 constexpr auto cmdCreateDpuOsAccount = 0xF4;
+constexpr auto cmdSetBiosPassword = 0x36;
+constexpr auto cmdGetBiosPassword = 0x37;
 } // namespace misc
 
 namespace chassis
